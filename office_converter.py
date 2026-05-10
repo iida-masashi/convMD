@@ -3,7 +3,7 @@ import sys
 
 def convert_office_file(file_path, output_dir="misc_posts"):
     if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
     print(f"Attempting to convert {file_path} using MarkItDown...")
     
