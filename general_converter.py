@@ -8,9 +8,10 @@ from utils import generate_frontmatter, process_images
 import urllib.parse
 
 def fetch_url(url):
-    # 日本語URL対策: urlをパースしてエンコードする
+    # 日本語URL対策: 一度アンクオートしてからエンコードし直す（二重エンコード防止）
     parsed = urllib.parse.urlparse(url)
-    encoded_path = urllib.parse.quote(parsed.path)
+    unquoted_path = urllib.parse.unquote(parsed.path)
+    encoded_path = urllib.parse.quote(unquoted_path)
     encoded_url = parsed._replace(path=encoded_path).geturl()
 
     req = urllib.request.Request(encoded_url, headers={'User-Agent': 'Mozilla/5.0'})

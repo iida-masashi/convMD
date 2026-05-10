@@ -41,8 +41,9 @@ def process_images(md_content, base_url, output_dir):
             filename = re.sub(r'[\\/*?:"<>|]', "", filename)
             local_img_path = os.path.join(image_dir, filename)
             
-            # URLエンコード（日本語ファイル名対策）
-            encoded_path = urllib.parse.quote(parsed_url.path)
+            # URLエンコード（日本語ファイル名や二重エンコード対策）
+            unquoted_path = urllib.parse.unquote(parsed_url.path)
+            encoded_path = urllib.parse.quote(unquoted_path)
             safe_img_url = parsed_url._replace(path=encoded_path).geturl()
             
             # SSLエラー対策
