@@ -33,7 +33,7 @@ def process_images(md_content, base_url, output_dir):
             
         try:
             parsed_url = urlparse(img_url)
-            filename = os.path.basename(parsed_url.path)
+            filename = os.path.basename(urllib.parse.unquote(parsed_url.path))
             if not filename or '.' not in filename:
                 filename = "image_" + str(hash(img_url))[1:9] + ".jpg"
             
@@ -41,10 +41,20 @@ def process_images(md_content, base_url, output_dir):
             filename = re.sub(r'[\\/*?:"<>|]', "", filename)
             local_img_path = os.path.join(image_dir, filename)
             
+            # URLエンコード（日本語ファイル名対策）
+            encoded_path = urllib.parse.quote(parsed_url.path)
+            safe_img_url = parsed_url._replace(path=encoded_path).geturl()
+            
+            # SSLエラー対策
+            import ssl
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            
             # まだダウンロードしていなければダウンロード
             if not os.path.exists(local_img_path):
-                req = urllib.request.Request(img_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(req, timeout=10) as response, open(local_img_path, 'wb') as out_file:
+                req = urllib.request.Request(safe_img_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10, context=ctx) as response, open(local_img_path, 'wb') as out_file:
                     out_file.write(response.read())
                     
             # リンクをローカル（相対パス）に置き換え
