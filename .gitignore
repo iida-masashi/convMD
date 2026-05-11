@@ -4,3 +4,8 @@ __pycache__/
 misc_posts/
 note_posts/
 kojiki_md/
+test_output/
+output/
+.venv/
+.mypy_cache/
+.ruff_cache/
