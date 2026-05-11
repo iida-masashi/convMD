@@ -1,7 +1,10 @@
 import pytest
 import os
-import urllib.parse
-from utils import generate_frontmatter, process_images
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from convmd.core.utils import generate_frontmatter
+from convmd.core.download import process_images
 
 def test_generate_frontmatter():
     title = "Test Title"
@@ -14,17 +17,19 @@ def test_generate_frontmatter():
     assert "tags: [tag1, tag2]" in frontmatter
     assert "date:" in frontmatter
 
-def test_process_images_encoding(tmp_path, mocker):
-    # Mocking urllib.request.urlopen and Request
-    mock_response = mocker.MagicMock()
-    mock_response.read.return_value = b"fake image data"
-    mock_response.__enter__.return_value = mock_response
-    mocker.patch("urllib.request.urlopen", return_value=mock_response)
-    mocker.patch("urllib.request.Request")
+@patch("convmd.core.download.httpx.Client")
+def test_process_images_encoding(mock_client_class, tmp_path):
+    # Mocking httpx.Client
+    mock_response = MagicMock()
+    mock_response.content = b"fake image data"
     
-    # Mocking os.path.exists to always return False for first check, then True after "download"
-    # Actually, simpler to just let it "download" to a temp dir
-    output_dir = str(tmp_path)
+    mock_client_instance = MagicMock()
+    mock_client_instance.get.return_value = mock_response
+    mock_client_instance.__enter__.return_value = mock_client_instance
+    
+    mock_client_class.return_value = mock_client_instance
+    
+    output_dir = tmp_path
     md_content = "![alt](https://example.com/樫原神社１.jpg)"
     base_url = "https://example.com/"
     
@@ -33,15 +38,20 @@ def test_process_images_encoding(tmp_path, mocker):
     # Check if link was replaced correctly
     assert "![alt](images/樫原神社１.jpg)" in new_md
     # Check if file exists
-    assert os.path.exists(os.path.join(output_dir, "images", "樫原神社１.jpg"))
+    assert (output_dir / "images" / "樫原神社１.jpg").exists()
 
-def test_process_images_double_encoding(tmp_path, mocker):
-    mock_response = mocker.MagicMock()
-    mock_response.read.return_value = b"fake image data"
-    mock_response.__enter__.return_value = mock_response
-    mocker.patch("urllib.request.urlopen", return_value=mock_response)
+@patch("convmd.core.download.httpx.Client")
+def test_process_images_double_encoding(mock_client_class, tmp_path):
+    mock_response = MagicMock()
+    mock_response.content = b"fake image data"
     
-    output_dir = str(tmp_path)
+    mock_client_instance = MagicMock()
+    mock_client_instance.get.return_value = mock_response
+    mock_client_instance.__enter__.return_value = mock_client_instance
+    
+    mock_client_class.return_value = mock_client_instance
+    
+    output_dir = tmp_path
     # URL is already encoded
     md_content = "![alt](https://example.com/%E5%A4%A7%E7%94%9F%E7%A5%9E%E7%A4%BE.jpg)"
     base_url = "https://example.com/"
@@ -51,4 +61,4 @@ def test_process_images_double_encoding(tmp_path, mocker):
     # It should not be double encoded to %25E5...
     # The filename should be unquoted
     assert "![alt](images/大生神社.jpg)" in new_md
-    assert os.path.exists(os.path.join(output_dir, "images", "大生神社.jpg"))
+    assert (output_dir / "images" / "大生神社.jpg").exists()

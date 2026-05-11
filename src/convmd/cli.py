@@ -9,6 +9,7 @@ from convmd.parsers.media.audio import convert_audio_file
 from convmd.parsers.media.qiita import convert_qiita
 from convmd.parsers.media.wikipedia import convert_wikipedia
 from convmd.parsers.media.zenn import convert_zenn
+from convmd.parsers.media.kokusho import convert_kokusho
 from convmd.parsers.office import convert_office_file
 from convmd.parsers.sns.note import convert_note_com
 from convmd.parsers.sns.twitter import convert_twitter
@@ -29,6 +30,11 @@ def main() -> None:
         "--output-dir",
         type=Path,
         help="Optional output directory. Overrides CONVMD_OUTPUT_DIR."
+    )
+    parser.add_argument(
+        "--transform",
+        type=str,
+        help="Optional instruction to transform a local Markdown file using Gemini API (e.g., '現代語訳してください', '要約してください')."
     )
 
     args = parser.parse_args()
@@ -53,6 +59,11 @@ def main() -> None:
         audio_extensions = {".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg", ".aac"}
         if target_path.suffix.lower() in audio_extensions:
             convert_audio_file(target_path, output_dir)
+            return
+
+        if target_path.suffix.lower() == ".md" and args.transform:
+            from convmd.core.transform import transform_markdown_with_gemini
+            transform_markdown_with_gemini(target_path, args.transform)
             return
 
         # Otherwise route to office/markitdown parser
@@ -97,6 +108,11 @@ def main() -> None:
     if "wikipedia.org" in domain:
         logger.info("Detected Wikipedia URL. Processing...")
         convert_wikipedia(target_str, output_dir)
+        return
+
+    if "kokusho.nijl.ac.jp" in domain:
+        logger.info("Detected Kokusho Database URL. Processing...")
+        convert_kokusho(target_str, output_dir)
         return
 
     logger.info("Falling back to general website extraction...")
