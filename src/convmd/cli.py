@@ -5,6 +5,9 @@ from urllib.parse import urlparse
 
 from convmd.config import get_output_dir
 from convmd.parsers.general import convert_general_website
+from convmd.parsers.media.qiita import convert_qiita
+from convmd.parsers.media.wikipedia import convert_wikipedia
+from convmd.parsers.media.zenn import convert_zenn
 from convmd.parsers.office import convert_office_file
 from convmd.parsers.sns.note import convert_note_com
 from convmd.parsers.sns.twitter import convert_twitter
@@ -70,6 +73,21 @@ def main() -> None:
     if "youtube.com" in domain or "youtu.be" in domain:
         logger.info("Detected YouTube video. Extracting transcript...")
         convert_youtube(target_str, output_dir)
+        return
+
+    if "qiita.com" in domain:
+        logger.info("Detected Qiita URL. Processing...")
+        convert_qiita(target_str, output_dir)
+        return
+
+    if "zenn.dev" in domain:
+        logger.info("Detected Zenn URL. Processing...")
+        convert_zenn(target_str, output_dir)
+        return
+
+    if "wikipedia.org" in domain:
+        logger.info("Detected Wikipedia URL. Processing...")
+        convert_wikipedia(target_str, output_dir)
         return
 
     logger.info("Falling back to general website extraction...")
