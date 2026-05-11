@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from convmd.config import get_output_dir
 from convmd.parsers.general import convert_general_website
+from convmd.parsers.media.audio import convert_audio_file
 from convmd.parsers.media.qiita import convert_qiita
 from convmd.parsers.media.wikipedia import convert_wikipedia
 from convmd.parsers.media.zenn import convert_zenn
@@ -47,6 +48,14 @@ def main() -> None:
     # Check if target is a local file
     if target_path.exists() and target_path.is_file():
         logger.info(f"Detected local file: {target_path}")
+
+        # Route to audio transcriber if it's an audio/video file
+        audio_extensions = {".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg", ".aac"}
+        if target_path.suffix.lower() in audio_extensions:
+            convert_audio_file(target_path, output_dir)
+            return
+
+        # Otherwise route to office/markitdown parser
         convert_office_file(target_path, output_dir)
         return
 
