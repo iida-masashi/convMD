@@ -1,3 +1,12 @@
+"""Legacy facade for HTML fetching and image downloading.
+
+The actual centralized helpers now live in ``convmd.core.http``. This module
+remains so existing imports (and unit tests patching ``convmd.core.download.httpx.Client``)
+continue to work without churn.
+"""
+
+from __future__ import annotations
+
 import logging
 import re
 import urllib.parse
@@ -6,23 +15,22 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from convmd.constants import DEFAULT_TIMEOUT, DOWNLOAD_TIMEOUT, USER_AGENT
+from convmd.core.http import _verify_default, encode_url_path
+
 logger = logging.getLogger(__name__)
 
 
 def fetch_html(url: str) -> str | None:
-    """Fetches HTML content from a given URL safely using httpx."""
-    parsed = urllib.parse.urlparse(url)
-    unquoted_path = urllib.parse.unquote(parsed.path)
-    encoded_path = urllib.parse.quote(unquoted_path)
-    encoded_url = parsed._replace(path=encoded_path).geturl()
-
+    """Fetch HTML content from a URL with safe path encoding and charset fallback."""
+    encoded_url = encode_url_path(url)
     try:
-        # httpx handles connection pooling and timeouts natively better than urllib
-        with httpx.Client(follow_redirects=True, timeout=10.0, verify=False) as client:
+        with httpx.Client(
+            follow_redirects=True, timeout=DEFAULT_TIMEOUT, verify=_verify_default()
+        ) as client:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             response = client.get(encoded_url, headers=headers)
             response.raise_for_status()
-            # fallback to utf-8 if encoding is not detected
             charset = response.encoding or "utf-8"
             return response.content.decode(charset, errors="replace")
     except httpx.RequestError as e:
@@ -33,15 +41,13 @@ def fetch_html(url: str) -> str | None:
         return None
 
 
+_IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+
 def process_images(md_content: str, base_url: str, output_dir: Path) -> str:
-    """
-    Finds Markdown image links, downloads the images locally,
-    and replaces the links with relative local paths.
-    """
+    """Replace remote Markdown image URLs with local downloads under ``output_dir/images``."""
     image_dir = output_dir / "images"
     image_dir.mkdir(parents=True, exist_ok=True)
-
-    img_pattern = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 
     def replace_img(match: re.Match) -> str:
         alt_text = match.group(1)
@@ -59,26 +65,27 @@ def process_images(md_content: str, base_url: str, output_dir: Path) -> str:
             if not filename or "." not in filename:
                 filename = f"image_{hash(img_url) % 100000000:08d}.jpg"
 
-            # Sanitize filename
             filename = re.sub(r'[\\/*?:"<>|]', "", filename)
             local_img_path = image_dir / filename
 
-            # URL encode path
             unquoted_path = urllib.parse.unquote(parsed_url.path)
             encoded_path = urllib.parse.quote(unquoted_path)
             safe_img_url = parsed_url._replace(path=encoded_path).geturl()
 
             if not local_img_path.exists():
-                with httpx.Client(follow_redirects=True, timeout=10.0, verify=False) as client:
-                    response = client.get(safe_img_url, headers={"User-Agent": "Mozilla/5.0"})
+                with httpx.Client(
+                    follow_redirects=True,
+                    timeout=DOWNLOAD_TIMEOUT,
+                    verify=_verify_default(),
+                ) as client:
+                    response = client.get(safe_img_url, headers={"User-Agent": USER_AGENT})
                     response.raise_for_status()
                     local_img_path.write_bytes(response.content)
 
-            # Return relative path starting from output_dir
             return f"![{alt_text}](images/{filename})"
 
         except Exception as e:
             logger.warning(f"Failed to download image {img_url}: {e}")
             return str(match.group(0))
 
-    return img_pattern.sub(replace_img, md_content)
+    return _IMG_PATTERN.sub(replace_img, md_content)

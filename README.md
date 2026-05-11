@@ -15,6 +15,12 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **note (`note.com`)**: クリエイターの最新記事一覧の一括取得。
 - **X / Twitter (`x.com`)**: ユーザーのタイムライン取得（画像含む）とスレッドのMarkdown化。
 - **Wikipedia (`wikipedia.org`)**: ナビゲーション等を除去したクリーンな本文抽出（他言語対応）。
+- **GitHub (`github.com`)**: README / Issue / Pull Request 本文＋コメントを取得（`GITHUB_TOKEN` で認証可）。
+- **Reddit (`reddit.com`)**: スレッド本文＋トップレベルコメント取得。
+- **Hacker News (`news.ycombinator.com`)**: 投稿本文＋上位コメント階層の取得。
+- **はてなブログ (`hatenablog.com` / `hatenablog.jp`)**, **Substack (`*.substack.com`)**, **Medium (`medium.com`)**: 本文抽出。
+- **SpeakerDeck (`speakerdeck.com`)**: 全スライド画像のダウンロードと、Gemini OCRによる自動文字起こし。
+- **Podcast / RSS (`*.rss`, `*.xml`, `/feed`)**: 最新エピソードのMP3を自動取得し、`faster-whisper` で文字起こし。
 
 ### 🏛️ デジタルアーカイブ・画像文字起こし (IIIF & OCR)
 - **国書データベース (`kokusho.nijl.ac.jp`)**: 古典籍の書誌データ抽出と、IIIFマニフェストからの高画質画像の自動ダウンロード。
@@ -30,6 +36,16 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 
 ### ✨ AIトランスフォーム機能 (Transformation)
 - 生成されたMarkdownファイルに対して、任意の指示（例：「現代語訳して」「要点を3つにまとめて」）を与え、Gemini API を使って内容を自動変換する `--transform` 機能を搭載しています。
+- `--auto-link` で重要キーワードを Obsidian の内部リンク `[[ ]]` に自動変換、`--summary` で複数ファイル横断のエグゼクティブサマリーを生成。
+
+### 🔁 差分追跡・コスト可視化・全文検索 (Phase 3)
+- 出力ディレクトリ配下に SQLite (`.convmd.db`) を持ち、URL ごとの本文ハッシュをキャッシュ。同一 URL を再取得した際に内容が変わっていなければスキップ。
+- `--diff-only` 指定時は、変化があった場合のみ `*_diff.md` を別途生成（unified diff 形式）。
+- 実行末尾に Gemini API のトークン使用量と概算コストを表示（`--no-cost` で抑止可）。
+- `convmd find "<キーワード>"` で既存の出力フォルダ配下を全文検索（ripgrep があれば自動使用）。
+
+### 📤 出力フォーマット (`--format`)
+- `md`（既定）、`json`（フロントマター + 本文を構造化した配列）、`epub` / `pdf`（要 `pandoc`、PDF は xelatex が必要）。
 
 ---
 
@@ -112,6 +128,35 @@ uv run python -m convmd.cli ./output/article.md --transform "要点を箇条書�
 ```
 （※結果は `article_transformed.md` として保存されます）
 
+### 古典籍の現代語訳併記モード (`--bilingual`)
+国書データベース（IIIF）に対して `--bilingual` を渡すと、OCR で翻刻した古典日本語/漢文の直後に、Gemini が生成した現代語訳を blockquote で併記します。
+
+```bash
+uv run python -m convmd.cli https://kokusho.nijl.ac.jp/biblio/100243699/ --bilingual
+```
+
+### 差分追跡 (`--diff-only`) / 全文検索 (`convmd find`)
+
+```bash
+# 1 回目（通常通り output/ に保存）
+uv run python -m convmd.cli https://example.com/news
+
+# 2 回目以降、内容が変わったときだけ *_diff.md を出力
+uv run python -m convmd.cli https://example.com/news --diff-only
+
+# 既存の出力フォルダ全体を全文検索
+uv run python -m convmd.cli find "国書" --ignore-case --limit 20
+```
+
+### 出力フォーマットの切替 (`--format`)
+```bash
+uv run python -m convmd.cli https://zenn.dev/.../slug --format json   # 構造化JSON
+uv run python -m convmd.cli ./output/*.md --format epub               # pandoc 必須
+```
+
+### TLS 設定
+既定では証明書検証が有効です。社内ネットワーク等で必要な場合に限り、環境変数 `CONVMD_INSECURE_SSL=1` で検証を無効化できます。
+
 ---
 
 ## 🏗 アーキテクチャと品質基準
@@ -120,5 +165,34 @@ uv run python -m convmd.cli ./output/article.md --transform "要点を箇条書�
 - 厳格な型ヒント (Type Hints) の適用と `mypy` (strict) による検証
 - `ruff` による高速な静的解析とフォーマット
 - 環境非依存（Mac/Windows）のパス操作 (`pathlib.Path`)
-- 安全で高速なHTTP通信 (`httpx`)
+- 安全で高速なHTTP通信 (`httpx`)、TLS 検証は既定で有効
 - スケーラブルで再利用性の高いモジュール構成（旧 `legacy/` スクリプトの廃止）
+
+### モジュール構成
+
+```
+src/convmd/
+├── cli.py            # エントリポイント（薄い）
+├── cli_args.py       # argparse + RunConfig dataclass
+├── pipeline.py       # extract → diff → transform → link → summary → dispatch
+├── routing.py        # URL ドメイン別の動的ディスパッチ（プラグイン追加に強い）
+├── constants.py      # サフィックス・モデル名・タイムアウトの単一の真実
+├── config.py         # 出力先解決（副作用なし）
+├── exporters/        # md / json / pandoc(epub,pdf)
+├── commands/         # find サブコマンド等
+├── core/
+│   ├── http.py       # 集中化された httpx ヘルパー（TLS 設定込み）
+│   ├── gemini.py     # Gemini API 集中化 + UsageTracker（コスト集計）
+│   ├── cache.py      # SQLite ベースのキャッシュ & unified diff
+│   ├── crawler.py    # 同一ドメインBFSクローラ
+│   ├── iiif.py       # IIIF マニフェスト処理 + 任意の bilingual OCR
+│   ├── ocr.py        # OCR の薄いラッパ
+│   ├── transform.py  # transform / auto-link / summary
+│   ├── download.py   # 画像/HTML 取得の互換シム
+│   └── utils.py      # フロントマター / ファイル名サニタイズ
+├── parsers/          # 各プラットフォーム別のパーサ群
+│   ├── general.py / office.py
+│   ├── media/        # zenn, qiita, wikipedia, kokusho, audio, hatena, substack, medium, speakerdeck, podcast
+│   └── sns/          # note, twitter, youtube, github, reddit, hackernews
+└── integrations/     # notebooklm / obsidian / slack
+```
