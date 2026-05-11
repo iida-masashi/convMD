@@ -10,10 +10,11 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+
 def fetch_qiita_api(endpoint: str) -> Any | None:
     """Fetches data from Qiita API v2."""
     url = f"https://qiita.com/api/v2/{endpoint}"
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
         with httpx.Client(follow_redirects=True, timeout=10.0) as client:
@@ -30,6 +31,7 @@ def fetch_qiita_api(endpoint: str) -> Any | None:
         logger.error(f"Failed to fetch Qiita API {url}: {e}")
         return None
 
+
 def convert_qiita_article(item_id: str, output_dir: Path) -> Path | None:
     """Fetches a single Qiita article and converts it to Markdown."""
     logger.info(f"Fetching Qiita article: {item_id}")
@@ -38,10 +40,10 @@ def convert_qiita_article(item_id: str, output_dir: Path) -> Path | None:
     if not data:
         return None
 
-    title = data.get('title', 'Untitled')
-    url = data.get('url', f"https://qiita.com/items/{item_id}")
-    body = data.get('body', '')  # Qiita API returns raw markdown in 'body'
-    tags = [t.get('name', '') for t in data.get('tags', [])]
+    title = data.get("title", "Untitled")
+    url = data.get("url", f"https://qiita.com/items/{item_id}")
+    body = data.get("body", "")  # Qiita API returns raw markdown in 'body'
+    tags = [t.get("name", "") for t in data.get("tags", [])]
     tags.append("qiita")
 
     # Although it's markdown, Qiita uses some HTML tags and external image links.
@@ -58,6 +60,7 @@ def convert_qiita_article(item_id: str, output_dir: Path) -> Path | None:
     logger.info(f"Saved Qiita article to {file_path}")
 
     return file_path
+
 
 def convert_qiita_user(user_id: str, output_dir: Path) -> Path | None:
     """Fetches a user's recent articles from Qiita."""
@@ -76,21 +79,22 @@ def convert_qiita_user(user_id: str, output_dir: Path) -> Path | None:
     logger.info(f"Found {len(items)} articles. Processing...")
 
     for item in items:
-        item_id = item.get('id')
+        item_id = item.get("id")
         if item_id:
             convert_qiita_article(item_id, user_dir)
 
     return user_dir
 
+
 def convert_qiita(url: str, output_dir: Path) -> Path | None:
     """Router for Qiita URLs."""
     # Pattern: https://qiita.com/username/items/item_id
-    item_match = re.search(r'qiita\.com/[^/]+/items/([a-zA-Z0-9]+)', url)
+    item_match = re.search(r"qiita\.com/[^/]+/items/([a-zA-Z0-9]+)", url)
     if item_match:
         return convert_qiita_article(item_match.group(1), output_dir)
 
     # Pattern: https://qiita.com/username
-    user_match = re.search(r'qiita\.com/([^/]+)/?$', url)
+    user_match = re.search(r"qiita\.com/([^/]+)/?$", url)
     if user_match:
         return convert_qiita_user(user_match.group(1), output_dir)
 

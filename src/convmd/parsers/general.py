@@ -9,6 +9,7 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+
 def convert_general_website(url: str, output_dir: Path) -> Path | None:
     """
     Fetches a general URL, extracts main content via Readability,

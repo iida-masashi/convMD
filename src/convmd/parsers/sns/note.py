@@ -10,16 +10,18 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+
 def fetch_json(url: str) -> dict[str, Any] | None:
     """Fetches JSON data safely using httpx."""
     try:
         with httpx.Client(follow_redirects=True, timeout=10.0, verify=False) as client:
-            response = client.get(url, headers={'User-Agent': 'Mozilla/5.0'})
+            response = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
             response.raise_for_status()
             return dict(response.json())  # type: ignore
     except Exception as e:
         logger.error(f"Failed to fetch JSON from {url}: {e}")
         return None
+
 
 def convert_note_com(urlname: str, output_dir: Path) -> Path | None:
     """
@@ -37,16 +39,16 @@ def convert_note_com(urlname: str, output_dir: Path) -> Path | None:
     while True:
         url = f"https://note.com/api/v2/creators/{urlname}/contents?kind=note&page={page}"
         data = fetch_json(url)
-        if not data or 'data' not in data or 'contents' not in data['data']:
+        if not data or "data" not in data or "contents" not in data["data"]:
             logger.warning("Failed to fetch notes or reached the end.")
             break
 
-        notes = data['data']['contents']
+        notes = data["data"]["contents"]
         if not notes:
             break
 
         all_notes.extend(notes)
-        if data['data'].get('isLastPage'):
+        if data["data"].get("isLastPage"):
             break
 
         page += 1
@@ -58,9 +60,9 @@ def convert_note_com(urlname: str, output_dir: Path) -> Path | None:
     logger.info(f"Found {len(all_notes)} notes. Starting conversion...")
 
     for note in all_notes:
-        key = note.get('key')
-        title = note.get('name', 'Untitled')
-        publish_at = note.get('publishAt', '')
+        key = note.get("key")
+        title = note.get("name", "Untitled")
+        publish_at = note.get("publishAt", "")
 
         if not key:
             continue
@@ -71,7 +73,7 @@ def convert_note_com(urlname: str, output_dir: Path) -> Path | None:
             if not note_data:
                 continue
 
-            html_body = note_data['data']['body']
+            html_body = note_data["data"]["body"]
 
             # Use markdownify instead of the legacy custom parser
             md_body = md(html_body, heading_style="ATX")
@@ -85,15 +87,13 @@ def convert_note_com(urlname: str, output_dir: Path) -> Path | None:
                     date_prefix = f"{match.group(1)}-"
 
             frontmatter = generate_frontmatter(
-                title=title,
-                url=f"https://note.com/{urlname}/n/{key}",
-                tags=["sns", "note"]
+                title=title, url=f"https://note.com/{urlname}/n/{key}", tags=["sns", "note"]
             )
 
             filename = f"{date_prefix}{sanitize_filename(title)}.md"
             file_path = user_dir / filename
 
-            file_path.write_text(frontmatter + md_body, encoding='utf-8')
+            file_path.write_text(frontmatter + md_body, encoding="utf-8")
             logger.info(f"Converted note: {filename}")
 
         except Exception as e:

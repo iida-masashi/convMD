@@ -10,25 +10,30 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+
 def get_video_id(url: str) -> str | None:
     """Extracts YouTube video ID from URL."""
-    match = re.search(r'(?:v=|/)([0-9A-Za-z_-]{11}).*', url)
+    match = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11}).*", url)
     if match:
         return match.group(1)
     return None
 
+
 def get_video_title(video_id: str) -> str:
     """Fetches the video title using YouTube oEmbed API."""
-    url = f"https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v={video_id}&format=json"
+    url = (
+        f"https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v={video_id}&format=json"
+    )
     try:
         with httpx.Client(follow_redirects=True, timeout=5.0) as client:
             response = client.get(url)
             response.raise_for_status()
             data = response.json()
-            return str(data.get('title', f"YouTube_Video_{video_id}"))
+            return str(data.get("title", f"YouTube_Video_{video_id}"))
     except Exception as e:
         logger.warning(f"Failed to fetch video title for {video_id}: {e}")
         return f"YouTube_Video_{video_id}"
+
 
 def format_time(seconds: float) -> str:
     """Formats seconds into HH:MM:SS or MM:SS."""
@@ -37,6 +42,7 @@ def format_time(seconds: float) -> str:
     if hours > 0:
         return f"{hours}:{mins:02d}:{secs:02d}"
     return f"{mins:02d}:{secs:02d}"
+
 
 def convert_youtube(url: str, output_dir: Path) -> Path | None:
     """
@@ -55,7 +61,7 @@ def convert_youtube(url: str, output_dir: Path) -> Path | None:
         transcript_list = api.list_transcripts(video_id)  # type: ignore
         # 2. Try to find Japanese or English manual transcripts first
         try:
-            transcript_obj = transcript_list.find_transcript(['ja', 'en'])
+            transcript_obj = transcript_list.find_transcript(["ja", "en"])
             transcript = transcript_obj.fetch()
         except Exception:
             # Fallback to the first available transcript
@@ -66,7 +72,7 @@ def convert_youtube(url: str, output_dir: Path) -> Path | None:
         # Final fallback using the simple method
         try:
             api2: Any = YouTubeTranscriptApi
-            transcript = api2.get_transcript(video_id, languages=['ja', 'en'])
+            transcript = api2.get_transcript(video_id, languages=["ja", "en"])
         except Exception as e2:
             logger.error(f"Failed to fetch YouTube transcript: {e} / {e2}")
             return None
@@ -85,16 +91,16 @@ def convert_youtube(url: str, output_dir: Path) -> Path | None:
         "## 動画情報\n",
         f"- **タイトル**: {title}\n",
         f"- **URL**: {url}\n\n",
-        "## 文字起こし\n\n"
+        "## 文字起こし\n\n",
     ]
 
     for entry in transcript:
         # Type fallback depending on transcript_api version
-        start = float(entry.get('start', 0.0))
-        text = str(entry.get('text', ''))
+        start = float(entry.get("start", 0.0))
+        text = str(entry.get("text", ""))
 
         start_time = format_time(start)
-        text = text.replace('\n', ' ')
+        text = text.replace("\n", " ")
         lines.append(f"**[{start_time}]** {text}\n\n")
 
     safe_title = sanitize_filename(title)

@@ -10,12 +10,13 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+
 def fetch_twitter_timeline(screen_name: str) -> list[dict[str, Any]] | None:
     """Fetches a user's timeline from the syndication API using httpx."""
     url = f"https://syndication.twitter.com/srv/timeline-profile/screen-name/{screen_name}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     }
 
     logger.info(f"Fetching timeline for @{screen_name}...")
@@ -40,11 +41,12 @@ def fetch_twitter_timeline(screen_name: str) -> list[dict[str, Any]] | None:
     json_data = match.group(1)
     try:
         data = json.loads(json_data)
-        entries = data['props']['pageProps']['timeline']['entries']
+        entries = data["props"]["pageProps"]["timeline"]["entries"]
         return list(entries)  # type: ignore
     except Exception as e:
         logger.error(f"Error parsing JSON data: {e}")
         return None
+
 
 def convert_twitter(screen_name: str, output_dir: Path) -> Path | None:
     """Fetches and converts recent tweets to a single Markdown file."""
@@ -55,35 +57,30 @@ def convert_twitter(screen_name: str, output_dir: Path) -> Path | None:
     tweets = []
 
     for entry in entries:
-        if entry.get('type') == 'tweet':
-            tweet_data = entry.get('content', {}).get('tweet', {})
+        if entry.get("type") == "tweet":
+            tweet_data = entry.get("content", {}).get("tweet", {})
 
-            tweet_id = tweet_data.get('id_str')
-            created_at = tweet_data.get('created_at') # e.g., "Sat Sep 14 01:16:40 +0000 2024"
-            text = tweet_data.get('text', '')
+            tweet_id = tweet_data.get("id_str")
+            created_at = tweet_data.get("created_at")  # e.g., "Sat Sep 14 01:16:40 +0000 2024"
+            text = tweet_data.get("text", "")
 
             # Since datetime format from Twitter is rigid, we'll keep it as a string for simplicity or parse it
             date_str = created_at
 
             # Extract Media
             media_urls = []
-            entities = tweet_data.get('entities', {})
-            if 'media' in entities:
-                for m in entities['media']:
-                    media_url = m.get('media_url_https')
+            entities = tweet_data.get("entities", {})
+            if "media" in entities:
+                for m in entities["media"]:
+                    media_url = m.get("media_url_https")
                     if media_url:
                         media_urls.append(media_url)
                         # Remove the t.co URL from text to keep it clean
-                        url_tco = m.get('url', '')
+                        url_tco = m.get("url", "")
                         if url_tco:
-                            text = text.replace(url_tco, '').strip()
+                            text = text.replace(url_tco, "").strip()
 
-            tweets.append({
-                'id': tweet_id,
-                'date': date_str,
-                'text': text,
-                'media': media_urls
-            })
+            tweets.append({"id": tweet_id, "date": date_str, "text": text, "media": media_urls})
 
     if not tweets:
         logger.info(f"No tweets found for @{screen_name}.")
@@ -98,7 +95,7 @@ def convert_twitter(screen_name: str, output_dir: Path) -> Path | None:
     frontmatter = generate_frontmatter(
         title=f"@{screen_name} の投稿まとめ",
         url=f"https://x.com/{screen_name}",
-        tags=["sns", "twitter", screen_name]
+        tags=["sns", "twitter", screen_name],
     )
 
     lines = [frontmatter, f"# @{screen_name} の投稿まとめ\n\n", "---\n\n"]
@@ -107,7 +104,7 @@ def convert_twitter(screen_name: str, output_dir: Path) -> Path | None:
         lines.append(f"### {t['date']} (ID: {t['id']})\n\n")
         lines.append(f"{t['text']}\n\n")
 
-        for m in t['media']:
+        for m in t["media"]:
             lines.append(f"![image]({m})\n\n")
 
         lines.append(f"[Twitterで見る](https://x.com/{screen_name}/status/{t['id']})\n\n")

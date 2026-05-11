@@ -5,6 +5,7 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+
 def format_timestamp(seconds: float) -> str:
     """Formats seconds into HH:MM:SS or MM:SS."""
     mins, secs = divmod(int(seconds), 60)
@@ -12,6 +13,7 @@ def format_timestamp(seconds: float) -> str:
     if hours > 0:
         return f"{hours}:{mins:02d}:{secs:02d}"
     return f"{mins:02d}:{secs:02d}"
+
 
 def convert_audio_file(file_path: Path, output_dir: Path) -> Path | None:
     """
@@ -44,7 +46,9 @@ def convert_audio_file(file_path: Path, output_dir: Path) -> Path | None:
         # Transcribe with VAD (Voice Activity Detection) filter to skip silence
         segments, info = model.transcribe(str(file_path), beam_size=5, vad_filter=True)
 
-        logger.info(f"Detected language '{info.language}' with probability {info.language_probability:.2f}")
+        logger.info(
+            f"Detected language '{info.language}' with probability {info.language_probability:.2f}"
+        )
 
         safe_title = sanitize_filename(file_path.stem)
         filename = f"{safe_title}.md"
@@ -53,7 +57,7 @@ def convert_audio_file(file_path: Path, output_dir: Path) -> Path | None:
         frontmatter = generate_frontmatter(
             title=file_path.name,
             url=f"file://{file_path.resolve()}",
-            tags=["local_file", "audio_transcript"]
+            tags=["local_file", "audio_transcript"],
         )
 
         lines = [
@@ -61,7 +65,7 @@ def convert_audio_file(file_path: Path, output_dir: Path) -> Path | None:
             f"# {file_path.name} の文字起こし\n\n",
             f"- **検出言語**: {info.language}\n",
             "- **使用モデル**: Whisper (faster-whisper)\n\n",
-            "## トランスクリプト\n\n"
+            "## トランスクリプト\n\n",
         ]
 
         # Process segments as an iterator
@@ -77,5 +81,7 @@ def convert_audio_file(file_path: Path, output_dir: Path) -> Path | None:
         return out_path
 
     except Exception as e:
-        logger.error(f"Failed to transcribe audio file {file_path}. Ensure FFmpeg is installed in your PATH. Error: {e}")
+        logger.error(
+            f"Failed to transcribe audio file {file_path}. Ensure FFmpeg is installed in your PATH. Error: {e}"
+        )
         return None

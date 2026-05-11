@@ -12,14 +12,8 @@ def generate_frontmatter(title: str, url: str, tags: Sequence[str] | None = None
     # Use timezone-aware datetime (UTC)
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    return (
-        f"---\n"
-        f"title: \"{title}\"\n"
-        f"source: \"{url}\"\n"
-        f"date: {date_str}\n"
-        f"tags: [{tags_str}]\n"
-        f"---\n\n"
-    )
+    return f'---\ntitle: "{title}"\nsource: "{url}"\ndate: {date_str}\ntags: [{tags_str}]\n---\n\n'
+
 
 def sanitize_filename(title: str) -> str:
     """Sanitizes a string to be used as a valid filename across OS."""

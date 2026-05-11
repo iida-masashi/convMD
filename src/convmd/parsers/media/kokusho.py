@@ -1,16 +1,14 @@
-import json
 import logging
-import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import httpx
 
-from convmd.core.utils import sanitize_filename
 from convmd.core.iiif import process_iiif_manifest
+from convmd.core.utils import sanitize_filename
 
 logger = logging.getLogger(__name__)
+
 
 def convert_kokusho(url: str, output_dir: Path) -> None:
     """国文学研究資料館の国書データベースの書籍データと画像を抽出する"""
@@ -20,7 +18,7 @@ def convert_kokusho(url: str, output_dir: Path) -> None:
     if "biblio" not in parts:
         logger.error(f"Invalid kokusho URL format: {url}")
         return
-        
+
     try:
         biblio_idx = parts.index("biblio")
         biblio_id = parts[biblio_idx + 1]
@@ -29,7 +27,7 @@ def convert_kokusho(url: str, output_dir: Path) -> None:
         return
 
     logger.info(f"Processing Kokusho Biblio ID: {biblio_id}")
-    
+
     # 2. APIエンドポイントの設定
     detail_api = f"https://kokusho.nijl.ac.jp/api/biblioDetail/{biblio_id}"
     manifest_api = f"https://kokusho.nijl.ac.jp/biblio/{biblio_id}/manifest"
@@ -47,15 +45,15 @@ def convert_kokusho(url: str, output_dir: Path) -> None:
     title = detail_data.get("hshomeipdf", "名称不明")
     if not title:
         title = detail_data.get("hshomei", f"国書データベース_{biblio_id}")
-        
+
     safe_title = sanitize_filename(title)
-    
+
     # 著者などの情報を整形
     author = " ".join(detail_data.get("author", [])) or "不明"
     published = " ".join(detail_data.get("bpublish", []))
     satsu = detail_data.get("satsu", "")
     collection = detail_data.get("collection", "")
-    
+
     # 4. 画像マニフェスト(IIIF)の取得と画像ダウンロード
     image_dir = output_dir / safe_title / "images"
     ocr_prompt = (
@@ -70,7 +68,7 @@ def convert_kokusho(url: str, output_dir: Path) -> None:
 
     # 5. Markdownテキストの構築
     current_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    
+
     md_content = f"""---
 title: "{title}"
 author: "{author}"
@@ -107,7 +105,7 @@ tags: [kokusho, iiif, web_clip]
         md_path = output_dir / safe_title / f"{safe_title}.md"
     else:
         md_path = output_dir / f"{safe_title}.md"
-        
+
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_content)
 

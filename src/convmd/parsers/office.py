@@ -7,6 +7,7 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
+
 def convert_office_file(file_path: Path, output_dir: Path) -> Path | None:
     """
     Converts local Office files (PPTX, XLSX, DOCX, PDF, etc.) to Markdown using MarkItDown.
@@ -27,9 +28,7 @@ def convert_office_file(file_path: Path, output_dir: Path) -> Path | None:
         out_path = output_dir / filename
 
         frontmatter = generate_frontmatter(
-            title=file_path.name,
-            url=str(file_path.resolve()),
-            tags=["local_file", "office"]
+            title=file_path.name, url=str(file_path.resolve()), tags=["local_file", "office"]
         )
 
         out_path.write_text(frontmatter + md_content, encoding="utf-8")
