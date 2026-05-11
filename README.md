@@ -1,46 +1,98 @@
-# Web to Markdown Toolkit
+# convMD (Web to Markdown Toolkit)
 
-WEB上の様々なソース（note.com, X/Twitter, 静的サイトなど）をMarkdownファイルに変換するためのツール集です。
+**convMD** は、WEB上の様々なソース（記事、SNSの投稿、動画、音声）やローカルのOfficeファイルを、Obsidian などのナレッジベースで扱いやすい **Markdown（.md）形式** に自動変換・保存する統合ツールキットです。
 
-## ディレクトリ構造
-- `main.py`: メインの実行プログラム。入力されたURLやファイルパスから適切な変換ツールを自動選択します。
-- `note_converter.py`: note.com の記事一覧や本文を取得します。
-- `twitter_converter.py`: X (Twitter) の最新の投稿を取得します。
-- `kojiki_converter.py`: 特殊な構造の静的サイト（阿波と古事記など）を解析します。
-- `general_converter.py`: 一般的なWEBページを汎用的にMarkdownへ変換します。
-- `office_converter.py`: Microsoftの「MarkItDown」を利用して、ローカルのPowerPoint、Excel、Word、PDFなどをMarkdownに変換します。※注意: この機能の利用にはPython 3.10以上と `markitdown` ライブラリのインストールが必要です。
+![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+![uv](https://img.shields.io/badge/package%20manager-uv-magenta.svg)
 
-## 使い方
-ターミナルから以下のコマンドを実行してください。
+## 🚀 主な機能と対応プラットフォーム
+
+URLやファイルパスを引数に渡すだけで、システムが自動的にプラットフォームを判別し、最適な変換エンジンを適用します。
+
+### 📱 SNS・メディア (Web sources)
+- **Zenn (`zenn.dev`)**: 記事のMarkdown抽出。
+- **Qiita (`qiita.com`)**: 記事本文の抽出、およびユーザーごとの最新記事一括取得。
+- **note (`note.com`)**: クリエイターの最新記事一覧の一括取得。
+- **X / Twitter (`x.com`)**: ユーザーのタイムライン取得（画像含む）とスレッドのMarkdown化。
+- **Wikipedia (`wikipedia.org`)**: ナビゲーション等を除去したクリーンな本文抽出（他言語対応）。
+
+### 🎥 動画・音声 (Media & Audio)
+- **YouTube**: 動画URLからの字幕（トランスクリプト）全抽出。
+- **ローカル音声/動画ファイル (`.mp3`, `.m4a`, `.mp4` など)**: `faster-whisper` を用いたオフラインでの高精度な自動文字起こし（※要FFmpeg）。
+
+### 📄 ローカルファイル・汎用抽出
+- **Office / PDF文書**: Microsoft `markitdown` エンジンを利用した PowerPoint, Excel, Word 等からのテキスト・Markdown抽出。
+- **一般的なWebサイト**: `Readability` 相当のアルゴリズムを用いた、汎用的なニュース・ブログの本文抽出。
+
+---
+
+## 🛠 インストール方法
+
+モダンなPythonパッケージマネージャーである **[uv](https://docs.astral.sh/uv/)** の利用を推奨しています。
 
 ```bash
-python3 web_to_md_tool/main.py <対象のURL または ファイルパス>
+# リポジトリのクローン
+git clone https://github.com/iida-masashi/convMD.git
+cd convMD
+
+# uv を用いた依存関係の同期（仮想環境の自動作成）
+uv sync
 ```
 
-### 例
-1. **note.com の全記事を取得する場合**
-   ```bash
-   python3 web_to_md_tool/main.py https://note.com/cute_hebe442
-   ```
+### 音声文字起こし機能を利用する場合の注意点
+ローカル音声ファイルの文字起こし（`faster-whisper`）を利用する場合は、システムに **FFmpeg** がインストールされている必要があります。
 
-2. **X (Twitter) の投稿を取得する場合**
-   ```bash
-   python3 web_to_md_tool/main.py https://x.com/kamiyamafudoki
-   ```
+- **Windows (winget)**: `winget install ffmpeg`
+- **macOS (Homebrew)**: `brew install ffmpeg`
 
-3. **一般的なニュース記事やブログを1件変換する場合**
-   ```bash
-   python3 web_to_md_tool/main.py https://kamakura8.blogspot.com/2021/08/blog-post_13.html
-   ```
+---
 
-4. **ローカルのPowerPointやExcelファイルを変換する場合 (MarkItDown使用)**
-   ```bash
-   python3 web_to_md_tool/main.py ./presentation.pptx
-   ```
+## 💻 使い方
 
-## 保存先
-- noteの記事は `note_posts/` フォルダへ
-- Xの投稿は `note_posts/` フォルダへ（ファイル名: `ユーザー名_tweets.md`）
-- Kojikiサイトは `kojiki_md/` フォルダへ
-- 一般的なサイトは `misc_posts/` フォルダへ
-それぞれ保存されます。
+`uv run python -m convmd.cli` コマンドの後に、変換したいターゲットの URL または ファイルパス を指定します。
+
+### 基本コマンド
+```bash
+uv run python -m convmd.cli <対象のURL または ファイルパス>
+```
+
+### 実行例
+
+**1. Zenn や Qiita の記事を取得**
+```bash
+uv run python -m convmd.cli https://zenn.dev/username/articles/slug
+uv run python -m convmd.cli https://qiita.com/username/items/item_id
+```
+
+**2. YouTubeの文字起こしを取得**
+```bash
+uv run python -m convmd.cli https://youtu.be/xxxxxxxxxxx
+```
+
+**3. 音声ファイルから議事録（文字起こし）を作成**
+```bash
+uv run python -m convmd.cli ./meeting_record.m4a
+```
+
+**4. ローカルのPowerPointをMarkdown化**
+```bash
+uv run python -m convmd.cli ./presentation.pptx
+```
+
+### 出力先の変更
+デフォルトでは、実行したディレクトリ配下の `output/` フォルダに保存されます。
+出力先を変更したい場合は `--output-dir` オプションを使用するか、環境変数 `CONVMD_OUTPUT_DIR` を設定してください。
+
+```bash
+uv run python -m convmd.cli https://example.com --output-dir "C:/Users/username/Documents/Obsidian"
+```
+
+---
+
+## 🏗 アーキテクチャと品質基準
+
+このプロジェクトは `python-safe-coding` 規約に準拠し、以下の基準で実装されています。
+- 厳格な型ヒント (Type Hints) の適用と `mypy` (strict) による検証
+- `ruff` による高速な静的解析とフォーマット
+- 環境非依存（Mac/Windows）のパス操作 (`pathlib.Path`)
+- 安全で高速なHTTP通信 (`httpx`)
