@@ -134,6 +134,18 @@ def summary_phase(files: list[Path], cfg: RunConfig) -> Path | None:
 
 
 def dispatch_phase(files: list[Path], summary_path: Path | None, cfg: RunConfig) -> None:
+    import os
+
+    obsidian_api_url = os.environ.get("OBSIDIAN_REST_API_URL")
+    obsidian_api_key = os.environ.get("OBSIDIAN_REST_API_KEY")
+
+    if obsidian_api_url and obsidian_api_key:
+        from convmd.integrations.obsidian_rest import export_to_obsidian_api
+
+        for md_file in files:
+            logger.info(f"Exporting to Obsidian via API: {md_file.name}")
+            export_to_obsidian_api(md_file, obsidian_api_url, obsidian_api_key, target_folder="Clippings")
+
     if cfg.slack_webhook and summary_path and summary_path.exists():
         from convmd.integrations.slack import send_to_slack
 
