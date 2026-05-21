@@ -20,7 +20,7 @@ from convmd.cli_args import RunConfig
 logger = logging.getLogger(__name__)
 
 Predicate = Callable[[ParseResult], bool]
-Handler = Callable[[str, ParseResult, Path, RunConfig], None]
+Handler = Callable[[str, ParseResult, Path, RunConfig], Path | None]
 
 
 def _has_domain(*needles: str) -> Predicate:
@@ -40,23 +40,23 @@ def _route(predicate: Predicate, module: str, func: str, log_message: str | None
            pass_cfg_kwargs: tuple[str, ...] = ()) -> tuple[Predicate, Handler]:
     """Build a route that dynamically resolves ``module.func`` at dispatch time."""
 
-    def handler(url: str, _p: ParseResult, out: Path, cfg: RunConfig) -> None:
+    def handler(url: str, _p: ParseResult, out: Path, cfg: RunConfig) -> Path | None:
         if log_message:
             logger.info(log_message)
         kwargs = {k: getattr(cfg, k) for k in pass_cfg_kwargs}
-        _dynamic_call(module, func, url, out, **kwargs)
+        return _dynamic_call(module, func, url, out, **kwargs)
 
     return predicate, handler
 
 
 def _route_note(predicate: Predicate) -> tuple[Predicate, Handler]:
-    def handler(url: str, p: ParseResult, out: Path, _cfg: RunConfig) -> None:
+    def handler(url: str, p: ParseResult, out: Path, _cfg: RunConfig) -> Path | None:
         parts = p.path.strip("/").split("/")
         if len(parts) == 1:
             logger.info("Detected note.com creator profile. Fetching all notes...")
-            _dynamic_call("convmd.parsers.sns.note", "convert_note_com", parts[0], out)
+            return _dynamic_call("convmd.parsers.sns.note", "convert_note_com", parts[0], out)
         else:
-            _dynamic_call(
+            return _dynamic_call(
                 "convmd.parsers.general", "convert_general_website", url, out
             )
 
@@ -64,12 +64,13 @@ def _route_note(predicate: Predicate) -> tuple[Predicate, Handler]:
 
 
 def _route_twitter(predicate: Predicate) -> tuple[Predicate, Handler]:
-    def handler(url: str, p: ParseResult, out: Path, _cfg: RunConfig) -> None:
+    def handler(url: str, p: ParseResult, out: Path, _cfg: RunConfig) -> Path | None:
         parts = p.path.strip("/").split("/")
         if parts:
             screen_name = parts[0]
             logger.info(f"Detected X.com account: @{screen_name}. Fetching recent tweets...")
-            _dynamic_call("convmd.parsers.sns.twitter", "convert_twitter", screen_name, out)
+            return _dynamic_call("convmd.parsers.sns.twitter", "convert_twitter", screen_name, out)
+        return None
 
     return predicate, handler
 
@@ -107,7 +108,21 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
             "convmd.parsers.media.kokusho",
             "convert_kokusho",
             "Detected Kokusho Database URL. Processing...",
-            pass_cfg_kwargs=("bilingual",),
+            pass_cfg_kwargs=("bilingual", "ocr"),
+        ),
+        _route(
+            _has_domain("digital.archives.go.jp"),
+            "convmd.parsers.media.naj",
+            "convert_naj",
+            "Detected National Archives of Japan URL. Processing...",
+            pass_cfg_kwargs=("ocr",),
+        ),
+        _route(
+            _has_domain("ndl.go.jp"),
+            "convmd.parsers.media.ndl",
+            "convert_ndl",
+            "Detected NDL Digital Collection URL. Processing...",
+            pass_cfg_kwargs=("ocr",),
         ),
         _route(
             _has_domain("github.com"),
@@ -156,7 +171,7 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
     def is_rss(p: ParseResult) -> bool:
         return p.path.endswith((".rss", ".xml", "/feed", "/rss"))
 
-    def podcast_handler(url: str, _p: ParseResult, out: Path, cfg: RunConfig) -> None:
+    def podcast_handler(url: str, _p: ParseResult, out: Path, cfg: RunConfig) -> Path | None:
         logger.info("Detected RSS feed. Treating as podcast...")
         _dynamic_call(
             "convmd.parsers.media.podcast",
@@ -165,12 +180,13 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
             out,
             limit=cfg.podcast_limit,
         )
+        return None
 
     routes.append((is_rss, podcast_handler))
 
-    def fallback_handler(url: str, _p: ParseResult, out: Path, _cfg: RunConfig) -> None:
+    def fallback_handler(url: str, _p: ParseResult, out: Path, _cfg: RunConfig) -> Path | None:
         logger.info("Falling back to general website extraction...")
-        _dynamic_call("convmd.parsers.general", "convert_general_website", url, out)
+        return _dynamic_call("convmd.parsers.general", "convert_general_website", url, out)
 
     routes.append((lambda _p: True, fallback_handler))
     return routes
@@ -190,12 +206,42 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
     """Dispatch a URL to the first matching parser."""
     if cfg is None:
         cfg = RunConfig(target=target_url, output_dir=output_dir)
+
+    # Force AI extract if requested
+    if cfg.ai_extract:
+        from convmd.core.http import get_html
+        from convmd.core.llm_extractor import extract_with_llm
+
+        html = get_html(target_url)
+        if html:
+            extract_with_llm(html, output_dir, url=target_url, schema=cfg.schema)
+            return
+
     parsed = urlparse(target_url)
     for predicate, handler in _routes():
         if predicate(parsed):
             try:
-                handler(target_url, parsed, output_dir, cfg)
+                res_path = handler(target_url, parsed, output_dir, cfg)
+
+                # Semantic Fallback: if result is too small, try AI
+                if res_path and res_path.exists() and res_path.stat().st_size < 200:
+                    logger.info(f"Extraction result for {target_url} seems too small. Trying AI...")
+                    from convmd.core.http import get_html
+                    from convmd.core.llm_extractor import extract_with_llm
+
+                    html = get_html(target_url)
+                    if html:
+                        extract_with_llm(html, output_dir, url=target_url, schema=cfg.schema)
+
             except Exception:
                 logger.exception(f"Handler failed for {target_url}")
+                # Fallback to AI extraction on failure
+                from convmd.core.http import get_html
+                from convmd.core.llm_extractor import extract_with_llm
+
+                html = get_html(target_url)
+                if html:
+                    logger.info(f"Retrying {target_url} with AI autonomous extraction...")
+                    extract_with_llm(html, output_dir, url=target_url, schema=cfg.schema)
             return
     logger.error(f"No route matched for {target_url}")

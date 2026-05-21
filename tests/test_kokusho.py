@@ -32,7 +32,7 @@ def test_convert_kokusho_success(mock_file_open, mock_process_iiif, mock_get, tm
 
     # Assertions
     mock_get.assert_called_once_with(
-        "https://kokusho.nijl.ac.jp/api/biblioDetail/12345", timeout=10.0
+        "https://kokusho.nijl.ac.jp/api/biblioDetail/12345", timeout=60.0
     )
     mock_process_iiif.assert_called_once()
 

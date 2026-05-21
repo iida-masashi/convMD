@@ -12,8 +12,29 @@ def test_generate_frontmatter():
 
     assert f'title: "{title}"' in frontmatter
     assert f'source: "{url}"' in frontmatter
-    assert "tags: [tag1, tag2]" in frontmatter
-    assert "date:" in frontmatter
+    assert 'tags:\n  - "tag1"\n  - "tag2"' in frontmatter
+    assert "created_at:" in frontmatter
+
+
+def test_generate_frontmatter_obsidian_style():
+    # extra args contain a mix of types to test serialization
+    frontmatter = generate_frontmatter(
+        title="Test Title",
+        url="https://example.com",
+        tags=["a", "b"],
+        author="John",
+        extra={"aliases": ["Alt"], "custom_id": 123}
+    )
+    
+    assert "---\n" in frontmatter
+    assert 'title: "Test Title"' in frontmatter
+    assert 'source: "https://example.com"' in frontmatter
+    assert 'author: "John"' in frontmatter
+    # Tags should be a YAML list
+    assert 'tags:\n  - "a"\n  - "b"\n' in frontmatter
+    assert 'aliases:\n  - "Alt"\n' in frontmatter
+    assert 'custom_id: 123' in frontmatter
+    assert 'created_at: ' in frontmatter # Should exist
 
 
 @patch("convmd.core.download.httpx.Client")

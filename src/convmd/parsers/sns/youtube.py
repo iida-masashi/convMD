@@ -96,10 +96,33 @@ def fetch_chapters(video_id: str) -> list[tuple[float, str]]:
     return chapters
 
 
+import http.cookiejar
+import requests
+
+def _load_cookies(session: requests.Session) -> None:
+    cookie_path = Path("cookies.txt")
+    if cookie_path.exists():
+        try:
+            cj = http.cookiejar.MozillaCookieJar(str(cookie_path))
+            cj.load(ignore_discard=True, ignore_expires=True)
+            session.cookies.update(cj) # type: ignore
+            logger.info("Loaded YouTube cookies from cookies.txt")
+        except Exception as e:
+            logger.warning(f"Failed to load cookies.txt: {e}")
+
 def _fetch_transcript(video_id: str) -> list[dict[str, Any]] | None:
+    session = requests.Session()
+    session.headers.update({"Accept-Language": "en-US"})
+    _load_cookies(session)
+    
     try:
-        api: Any = YouTubeTranscriptApi
-        transcript_list = api.list_transcripts(video_id)
+        if hasattr(YouTubeTranscriptApi, "list_transcripts"):
+            api_legacy: Any = YouTubeTranscriptApi
+            transcript_list = api_legacy.list_transcripts(video_id)
+        else:
+            api_new = YouTubeTranscriptApi(http_client=session)
+            transcript_list = api_new.list(video_id)
+
         try:
             return list(transcript_list.find_transcript(["ja", "en"]).fetch())
         except Exception:
@@ -107,8 +130,12 @@ def _fetch_transcript(video_id: str) -> list[dict[str, Any]] | None:
                 return list(t.fetch())
     except Exception as e:
         try:
-            api2: Any = YouTubeTranscriptApi
-            return list(api2.get_transcript(video_id, languages=["ja", "en"]))
+            if hasattr(YouTubeTranscriptApi, "get_transcript"):
+                api_legacy2: Any = YouTubeTranscriptApi
+                return list(api_legacy2.get_transcript(video_id, languages=["ja", "en"]))
+            else:
+                api_new2 = YouTubeTranscriptApi(http_client=session)
+                return list(api_new2.fetch(video_id, languages=("ja", "en")))
         except Exception as e2:
             logger.error(f"Failed to fetch YouTube transcript: {e} / {e2}")
             return None

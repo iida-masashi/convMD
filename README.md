@@ -15,6 +15,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **note (`note.com`)**: クリエイターの最新記事一覧の一括取得。
 - **X / Twitter (`x.com`)**: ユーザーのタイムライン取得（画像含む）とスレッドのMarkdown化。
 - **Wikipedia (`wikipedia.org`)**: ナビゲーション等を除去したクリーンな本文抽出（他言語対応）。
+- **国立公文書館デジタルアーカイブ (`digital.archives.go.jp`)**: ビューワーURLからのIIIFマニフェスト自動解析、高画質画像のダウンロード、およびAI OCRによる翻刻。
 - **GitHub (`github.com`)**: README / Issue / Pull Request 本文＋コメントを取得（`GITHUB_TOKEN` で認証可）。
 - **Reddit (`reddit.com`)**: スレッド本文＋トップレベルコメント取得。
 - **Hacker News (`news.ycombinator.com`)**: 投稿本文＋上位コメント階層の取得。
@@ -34,8 +35,11 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **Office / PDF文書**: Microsoft `markitdown` エンジンを利用した PowerPoint, Excel, Word 等からのテキスト・Markdown抽出。
 - **一般的なWebサイト**: `Readability` 相当のアルゴリズムを用いた、汎用的なニュース・ブログの本文抽出。
 
-### ✨ AIトランスフォーム機能 (Transformation)
-- 生成されたMarkdownファイルに対して、任意の指示（例：「現代語訳して」「要点を3つにまとめて」）を与え、Gemini API を使って内容を自動変換する `--transform` 機能を搭載しています。
+### ✨ ハイブリッド自律抽出エンジン (Hybrid Extraction)
+- **Tier 1 (Static)**: `Readability` や専用パーサーによる高速・低コストな抽出。
+- **Tier 2 (AI-Driven)**: 既存の解析が失敗した場合や、`--ai-extract` 指定時に、Gemini 3 がDOM構造を自律的に解析して Markdown 化します（本質的なコンテンツの抽出、メタデータの自動付与）。
+- **カスタムスキーマ**: `--schema` オプションに JSON 形式で抽出したい項目を指定することで、特定の情報を構造化データとして引き出すことが可能です。
+- **トランスフォーム**: 生成されたMarkdownファイルに対して、`--transform` オプションで任意の指示（例：「現代語訳して」「要約して」）を与え、Gemini API を使って内容を自動変換できます。
 - `--auto-link` で重要キーワードを Obsidian の内部リンク `[[ ]]` に自動変換、`--summary` で複数ファイル横断のエグゼクティブサマリーを生成。
 
 ### 🔁 差分追跡・コスト可視化・全文検索 (Phase 3)

@@ -16,6 +16,6 @@ class Models:
 
 
 USER_AGENT: Final[str] = "Mozilla/5.0"
-DEFAULT_TIMEOUT: Final[float] = 10.0
-DOWNLOAD_TIMEOUT: Final[float] = 30.0
-CRAWL_TIMEOUT: Final[float] = 15.0
+DEFAULT_TIMEOUT: Final[float] = 60.0
+DOWNLOAD_TIMEOUT: Final[float] = 60.0
+CRAWL_TIMEOUT: Final[float] = 60.0

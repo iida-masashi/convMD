@@ -30,7 +30,7 @@ _BILINGUAL_PROMPT = (
 )
 
 
-def convert_kokusho(url: str, output_dir: Path, *, bilingual: bool = False) -> None:
+def convert_kokusho(url: str, output_dir: Path, *, bilingual: bool = False, ocr: bool = False) -> None:
     """Fetch a Kokusho biblio entry plus IIIF images (and optional OCR/translation)."""
     parts = [p for p in url.strip("/").split("/") if p]
     if "biblio" not in parts:
@@ -66,10 +66,11 @@ def convert_kokusho(url: str, output_dir: Path, *, bilingual: bool = False) -> N
     collection = detail_data.get("collection", "")
 
     image_dir = output_dir / safe_title / "images"
+    logger.info(f"Fetching IIIF images for {title} (OCR enabled: {ocr})...")
     images_markdown = process_iiif_manifest(
         manifest_api,
         image_dir,
-        ocr_prompt=_OCR_PROMPT,
+        ocr_prompt=_OCR_PROMPT if ocr else None,
         secondary_prompt=_BILINGUAL_PROMPT if bilingual else None,
     )
 
@@ -112,3 +113,4 @@ def convert_kokusho(url: str, output_dir: Path, *, bilingual: bool = False) -> N
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(md_content)
     logger.info(f"Saved to {md_path}")
+    return md_path

@@ -29,7 +29,7 @@ def test_process_iiif_manifest_success(mock_transcribe, mock_download, mock_get,
     assert "![[images/page_0001.jpg]]" in markdown_result
     assert "> Mocked OCR text" in markdown_result
 
-    mock_get.assert_called_once_with(manifest_url, timeout=10.0)
+    mock_get.assert_called_once_with(manifest_url, timeout=60.0)
     mock_download.assert_called_once_with(
         "http://example.com/img1.jpg", image_dir / "page_0001.jpg"
     )

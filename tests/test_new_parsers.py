@@ -15,7 +15,7 @@ def test_github_readme(mock_get_json, tmp_path):
     assert out is not None
     text = out.read_text(encoding="utf-8")
     assert "Hello World" in text
-    assert "tags: [github, readme]" in text
+    assert 'tags:\n  - "github"\n  - "readme"' in text
 
 
 @patch("convmd.parsers.sns.github.get_json")

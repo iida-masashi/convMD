@@ -5,20 +5,32 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
-
-def _yaml_quote(value: str) -> str:
-    """Emit a YAML double-quoted scalar that survives embedded quotes/backslashes."""
-    return json.dumps(value, ensure_ascii=False)
-
+def _yaml_format(value: Any, indent: int = 0) -> str:
+    """Helper to format values as basic YAML without external libraries."""
+    padding = " " * indent
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return "[]"
+        items = [f"\n{padding}  - {_yaml_format(v).strip()}" for v in value]
+        return "".join(items)
+    elif isinstance(value, str):
+        # Fall back to json.dumps for safe quote escaping
+        return json.dumps(value, ensure_ascii=False)
+    elif isinstance(value, bool):
+        return "true" if value else "false"
+    elif value is None:
+        return "null"
+    else:
+        return str(value)
 
 def generate_frontmatter(
     title: str,
     url: str,
     tags: Sequence[str] | None = None,
     *,
-    extra: Mapping[str, str] | None = None,
+    extra: Mapping[str, Any] | None = None,
     author: str | None = None,
     published_at: str | None = None,
     reading_time_min: int | None = None,
@@ -31,31 +43,38 @@ def generate_frontmatter(
     Optional keyword-only metadata (author, published_at, reading_time_min, excerpt, cover,
     plus arbitrary ``extra`` dict) is appended when provided.
     """
-    if tags is None:
-        tags = []
-    tags_str = ", ".join(tags)
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     lines = [
         "---",
-        f"title: {_yaml_quote(title)}",
-        f"source: {_yaml_quote(url)}",
-        f"date: {date_str}",
-        f"tags: [{tags_str}]",
+        f"title: {_yaml_format(title)}",
+        f"source: {_yaml_format(url)}",
+        f"created_at: {_yaml_format(date_str)}",
     ]
+    
+    if tags:
+        lines.append(f"tags:{_yaml_format(tags)}")
+    else:
+        lines.append("tags: []")
+
     if author:
-        lines.append(f"author: {_yaml_quote(author)}")
+        lines.append(f"author: {_yaml_format(author)}")
     if published_at:
-        lines.append(f"published_at: {_yaml_quote(published_at)}")
+        lines.append(f"published_at: {_yaml_format(published_at)}")
     if reading_time_min is not None:
         lines.append(f"reading_time_min: {reading_time_min}")
     if excerpt:
-        lines.append(f"excerpt: {_yaml_quote(excerpt)}")
+        lines.append(f"excerpt: {_yaml_format(excerpt)}")
     if cover:
-        lines.append(f"cover: {_yaml_quote(cover)}")
+        lines.append(f"cover: {_yaml_format(cover)}")
+        
     if extra:
         for key, val in extra.items():
-            lines.append(f"{key}: {_yaml_quote(str(val))}")
+            if key == "aliases" and isinstance(val, (list, tuple)):
+                lines.append(f"aliases:{_yaml_format(val)}")
+            else:
+                lines.append(f"{key}: {_yaml_format(val)}")
+
     lines.append("---\n\n")
     return "\n".join(lines)
 
