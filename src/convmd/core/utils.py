@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
+
 def _yaml_format(value: Any, indent: int = 0) -> str:
     """Helper to format values as basic YAML without external libraries."""
     padding = " " * indent
@@ -51,7 +52,7 @@ def generate_frontmatter(
         f"source: {_yaml_format(url)}",
         f"created_at: {_yaml_format(date_str)}",
     ]
-    
+
     if tags:
         lines.append(f"tags:{_yaml_format(tags)}")
     else:
@@ -67,7 +68,7 @@ def generate_frontmatter(
         lines.append(f"excerpt: {_yaml_format(excerpt)}")
     if cover:
         lines.append(f"cover: {_yaml_format(cover)}")
-        
+
     if extra:
         for key, val in extra.items():
             if key == "aliases" and isinstance(val, (list, tuple)):

@@ -47,16 +47,16 @@ def test_apply_obsidian_links(mock_generate, mock_config, tmp_path):
     # Setup test file
     test_file = tmp_path / "test.md"
     test_file.write_text("---\ntitle: \"Test\"\ntags:\n  - \"raw\"\n---\n\n徳島県は阿波国と呼ばれていた。", encoding="utf-8")
-    
+
     # Mock AI response with tags at the end
     mock_generate.return_value = "---\ntitle: \"Test\"\ntags:\n  - \"raw\"\n---\n\n[[徳島県]]は[[阿波国]]と呼ばれていた。\n\nTAGS: 徳島, 歴史"
-    
+
     out_path = apply_obsidian_links(test_file)
-    
+
     assert out_path is not None
     assert out_path.exists()
     content = out_path.read_text(encoding="utf-8")
-    
+
     # Check if tags were injected into frontmatter
     assert 'tags:\n  - "raw"\n  - "徳島"\n  - "歴史"' in content
     # Check if text was linked

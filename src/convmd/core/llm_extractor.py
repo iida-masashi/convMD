@@ -62,7 +62,23 @@ def extract_with_llm(
             logger.error("LLM returned an empty response.")
             return None
 
-        data = json.loads(response.text)
+        # Robust JSON parsing: sometimes LLM adds preamble/postamble even in JSON mode
+        raw_text = response.text.strip()
+        try:
+            data = json.loads(raw_text)
+        except json.JSONDecodeError:
+            # Try to find the first '{' and last '}'
+            start = raw_text.find("{")
+            end = raw_text.rfind("}")
+            if start != -1 and end != -1:
+                try:
+                    data = json.loads(raw_text[start : end + 1])
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse JSON even after trimming: {e}")
+                    return None
+            else:
+                logger.error("No JSON block found in response.")
+                return None
 
         title = data.get("title") or "Untitled AI Extract"
         content_markdown = data.get("content_markdown", "")

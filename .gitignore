@@ -9,3 +9,7 @@ output/
 .venv/
 .mypy_cache/
 .ruff_cache/
+.pytest_cache/
+*.log
+cookies.txt
+*_raw.md

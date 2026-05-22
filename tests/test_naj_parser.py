@@ -1,5 +1,4 @@
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from convmd.parsers.media.naj import convert_naj
 
@@ -20,7 +19,7 @@ def test_convert_naj_success(mock_process_iiif, tmp_path):
     assert "iiif" in content
     assert "# NAJ_1207985" in content
     assert "![[images/page_0001.jpg]]" in content
-    
+
     mock_process_iiif.assert_called_once()
     # Check if ocr_prompt was passed
     args, kwargs = mock_process_iiif.call_args

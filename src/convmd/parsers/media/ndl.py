@@ -53,13 +53,13 @@ def convert_ndl(url: str, output_dir: Path, *, ocr: bool = False, **kwargs: Any)
     if isinstance(title, list):
         # Some manifests have label as list
         title = " ".join(title)
-        
+
     # Sometimes it's a dict depending on IIIF version, handling strings simply
     if isinstance(title, dict):
         title = title.get("ja", [title.get("none", [f"NDL_{pid}"])[0]])[0]
 
     safe_title = sanitize_filename(str(title))
-    
+
     # Extract author and other metadata if available
     metadata_list = manifest_data.get("metadata", [])
     author = "不明"
@@ -74,7 +74,7 @@ def convert_ndl(url: str, output_dir: Path, *, ocr: bool = False, **kwargs: Any)
 
     # IIIF processing
     image_dir = output_dir / safe_title / "images"
-    
+
     logger.info(f"Fetching IIIF images for {title} (OCR enabled: {ocr})...")
     images_markdown = process_iiif_manifest(
         manifest_api,

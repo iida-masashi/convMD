@@ -6,7 +6,6 @@ import logging
 import shutil
 import time
 from pathlib import Path
-from urllib.parse import urlparse
 
 from convmd.cli_args import RunConfig
 from convmd.constants import Suffix
@@ -25,7 +24,7 @@ def process_target(
     target_path: Path,
     output_dir: Path,
     cfg: RunConfig | None = None,
-) -> None:
+) -> Path | None:
     """Process a single target URL or file — preserved as a stable public API for tests."""
     try:
         if target_path.exists() and target_path.is_file():
@@ -36,25 +35,32 @@ def process_target(
                 if target_path.resolve() != dest_path.resolve():
                     shutil.copy2(target_path, dest_path)
                     logger.info(f"Copied markdown file to {dest_path}")
-                return
+                return dest_path
 
             if target_path.suffix.lower() in _AUDIO_EXTENSIONS:
                 from convmd.parsers.media.audio import convert_audio_file
 
-                convert_audio_file(target_path, output_dir)
-                return
+                return convert_audio_file(target_path, output_dir)
 
             from convmd.parsers.office import convert_office_file
 
-            convert_office_file(target_path, output_dir)
-            return
+            return convert_office_file(
+                target_path,
+                output_dir,
+                ai_extract=cfg.ai_extract if cfg else False,
+                schema=cfg.schema if cfg else None,
+            )
 
         logger.info(f"Analyzing URL: {target_str}")
         from convmd.routing import dispatch_url
 
+        # Note: dispatch_url handles its own saving, but returns no path for multi-file outputs.
+        # We rely on the timestamp-based scan in extract_phase as a backup.
         dispatch_url(target_str, output_dir, cfg)
+        return None
     except Exception:
         logger.exception(f"Failed to process target '{target_str}'")
+        return None
 
 
 def _is_pipeline_artifact(name: str) -> bool:
@@ -69,12 +75,15 @@ def _is_pipeline_artifact(name: str) -> bool:
 def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
     """Run parsers and return newly generated Markdown files."""
     target_path = Path(cfg.target)
+    results: list[Path] = []
 
     if target_path.exists() and target_path.is_dir():
         logger.info(f"Detected directory input. Processing files recursively in: {target_path}")
         for file_path in target_path.rglob("*"):
             if file_path.is_file() and not any(part.startswith(".") for part in file_path.parts):
-                process_target(str(file_path), file_path, cfg.output_dir, cfg)
+                p = process_target(str(file_path), file_path, cfg.output_dir, cfg)
+                if p:
+                    results.append(p)
     else:
         is_url = not (target_path.exists() and target_path.is_file())
         if is_url and cfg.depth > 0:
@@ -85,17 +94,23 @@ def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
 
             crawled = crawl_urls(cfg.target, cfg.depth)
             for url in crawled:
-                process_target(url, Path(url), cfg.output_dir, cfg)
+                p = process_target(url, Path(url), cfg.output_dir, cfg)
+                if p:
+                    results.append(p)
         else:
-            process_target(cfg.target, target_path, cfg.output_dir, cfg)
+            p = process_target(cfg.target, target_path, cfg.output_dir, cfg)
+            if p:
+                results.append(p)
 
-    new_md: list[Path] = []
+    # Backup: scan for newly created files (handles multi-file outputs like crawling)
+    new_md_set: set[Path] = {p for p in results if p.suffix.lower() == ".md"}
     for md_file in cfg.output_dir.rglob("*.md"):
         if md_file.is_file() and md_file.stat().st_mtime >= start_time:
             if not _is_pipeline_artifact(md_file.name):
-                new_md.append(md_file)
+                new_md_set.add(md_file)
 
-    logger.info(f"Found {len(new_md)} newly generated markdown files for pipeline processing.")
+    new_md = sorted(new_md_set)
+    logger.info(f"Found {len(new_md)} generated markdown files for pipeline processing.")
     return new_md
 
 

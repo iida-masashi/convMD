@@ -2,7 +2,6 @@ from unittest.mock import patch
 
 from convmd.parsers.sns import youtube
 
-
 SAMPLE_HTML = '''
 {"chapterRenderer":{"title":{"simpleText":"Intro"},"timeRangeStartMillis":0}}
 {"chapterRenderer":{"title":{"simpleText":"Main"},"timeRangeStartMillis":60000}}

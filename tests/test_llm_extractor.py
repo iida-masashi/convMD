@@ -1,4 +1,3 @@
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from convmd.core.llm_extractor import extract_with_llm

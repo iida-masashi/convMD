@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from convmd.constants import Suffix
@@ -75,8 +76,6 @@ def transform_markdown_with_gemini(file_path: Path, instruction: str) -> Path | 
     return _run_and_save(prompt, out_path, "Transformation")
 
 
-import re
-
 def apply_obsidian_links(file_path: Path) -> Path | None:
     """Auto-link important keywords as [[wikilinks]] and inject tags."""
     if not gemini.is_configured():
@@ -89,11 +88,11 @@ def apply_obsidian_links(file_path: Path) -> Path | None:
         text=original_content,
     )
     out_path = file_path.parent / f"{file_path.stem}{Suffix.LINKED}"
-    
+
     text = gemini.generate_text(prompt)
     if text is None:
         return None
-        
+
     # Extract tags from the end
     tags = []
     lines = text.strip().split('\n')
@@ -102,13 +101,13 @@ def apply_obsidian_links(file_path: Path) -> Path | None:
         raw_tags = tag_line.replace('TAGS:', '').split(',')
         tags = [t.strip() for t in raw_tags if t.strip()]
         text = '\n'.join(lines)
-        
+
     # Inject tags into frontmatter
     if tags:
         # We need to inject tags properly into YAML array format
         tag_yaml_items = [f'  - "{t}"' for t in tags]
         tag_yaml_block = "\n".join(tag_yaml_items) + "\n"
-        
+
         # Simple injection assuming basic YAML format
         # Case 1: tags array already exists
         if "tags:\n" in text:
@@ -116,7 +115,7 @@ def apply_obsidian_links(file_path: Path) -> Path | None:
         # Case 2: frontmatter exists but no tags array yet
         elif "---\n" in text:
             text = text.replace("---\n", f"---\ntags:\n{tag_yaml_block}", 1)
-            
+
     out_path.write_text(text + "\n", encoding="utf-8")
     logger.info(f"Auto-Linking completed. Saved to: {out_path}")
     return out_path

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import json
+import http.cookiejar
 import logging
 import re
 from pathlib import Path
 from typing import Any
 
+import requests
 from youtube_transcript_api import YouTubeTranscriptApi  # type: ignore
 
 from convmd.core.download import process_images
@@ -96,9 +97,6 @@ def fetch_chapters(video_id: str) -> list[tuple[float, str]]:
     return chapters
 
 
-import http.cookiejar
-import requests
-
 def _load_cookies(session: requests.Session) -> None:
     cookie_path = Path("cookies.txt")
     if cookie_path.exists():
@@ -114,7 +112,7 @@ def _fetch_transcript(video_id: str) -> list[dict[str, Any]] | None:
     session = requests.Session()
     session.headers.update({"Accept-Language": "en-US"})
     _load_cookies(session)
-    
+
     try:
         if hasattr(YouTubeTranscriptApi, "list_transcripts"):
             api_legacy: Any = YouTubeTranscriptApi

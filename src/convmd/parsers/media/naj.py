@@ -20,10 +20,10 @@ def convert_naj(url: str, output_dir: Path, *, ocr: bool = False) -> None:
         except (ValueError, IndexError):
             pass
     elif "iiif" in parts:
-         try:
+        try:
             idx = parts.index("iiif")
             item_id = parts[idx + 1]
-         except:
+        except (ValueError, IndexError):
             pass
 
     if not item_id:

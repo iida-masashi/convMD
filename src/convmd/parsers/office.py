@@ -8,7 +8,13 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 logger = logging.getLogger(__name__)
 
 
-def convert_office_file(file_path: Path, output_dir: Path) -> Path | None:
+def convert_office_file(
+    file_path: Path,
+    output_dir: Path,
+    *,
+    ai_extract: bool = False,
+    schema: str | None = None,
+) -> Path | None:
     """
     Converts local Office files (PPTX, XLSX, DOCX, PDF, etc.) to Markdown using MarkItDown.
     """
@@ -22,6 +28,17 @@ def convert_office_file(file_path: Path, output_dir: Path) -> Path | None:
         md_engine = MarkItDown()
         result = md_engine.convert(str(file_path))
         md_content = result.text_content
+
+        if ai_extract:
+            from convmd.core.llm_extractor import extract_with_llm
+
+            logger.info(f"Applying AI autonomous extraction to {file_path.name} content...")
+            return extract_with_llm(
+                md_content,
+                output_dir,
+                url=str(file_path.resolve()),
+                schema=schema,
+            )
 
         safe_title = sanitize_filename(file_path.stem)
         filename = f"{safe_title}.md"

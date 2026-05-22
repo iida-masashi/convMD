@@ -25,7 +25,7 @@ def test_generate_frontmatter_obsidian_style():
         author="John",
         extra={"aliases": ["Alt"], "custom_id": 123}
     )
-    
+
     assert "---\n" in frontmatter
     assert 'title: "Test Title"' in frontmatter
     assert 'source: "https://example.com"' in frontmatter
