@@ -13,3 +13,5 @@ output/
 *.log
 cookies.txt
 *_raw.md
+.coverage
+htmlcov/
