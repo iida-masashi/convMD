@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -73,7 +74,12 @@ def build_find_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _typed(args: argparse.Namespace, name: str, default, expected_type):
+def _typed(
+    args: argparse.Namespace,
+    name: str,
+    default: Any,
+    expected_type: type | tuple[type, ...] | None,
+) -> Any:
     """Tolerant attribute getter: returns the default if the attribute is missing
     or not of the expected type (e.g. a stray MagicMock from a partially-stubbed args object)."""
     value = getattr(args, name, default)

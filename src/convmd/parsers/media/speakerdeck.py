@@ -24,9 +24,10 @@ def _slide_image_urls(html: str) -> list[str]:
     urls: list[str] = []
     soup = BeautifulSoup(html, "html.parser")
     for img in soup.select("img[data-src], img[src]"):
-        src = img.get("data-src") or img.get("src")
-        if not src:
+        raw = img.get("data-src") or img.get("src")
+        if not raw:
             continue
+        src = str(raw)
         if "speakerdeck" not in src and "files.speakerdeck.com" not in src:
             continue
         if any(seg in src for seg in ("slide_", "/slides/")):

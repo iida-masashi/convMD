@@ -30,19 +30,19 @@ _BILINGUAL_PROMPT = (
 )
 
 
-def convert_kokusho(url: str, output_dir: Path, *, bilingual: bool = False, ocr: bool = False) -> None:
+def convert_kokusho(url: str, output_dir: Path, *, bilingual: bool = False, ocr: bool = False) -> Path | None:
     """Fetch a Kokusho biblio entry plus IIIF images (and optional OCR/translation)."""
     parts = [p for p in url.strip("/").split("/") if p]
     if "biblio" not in parts:
         logger.error(f"Invalid kokusho URL format: {url}")
-        return
+        return None
 
     try:
         biblio_idx = parts.index("biblio")
         biblio_id = parts[biblio_idx + 1]
     except (ValueError, IndexError):
         logger.error(f"Could not extract biblio ID from: {url}")
-        return
+        return None
 
     logger.info(f"Processing Kokusho Biblio ID: {biblio_id}")
     detail_api = f"https://kokusho.nijl.ac.jp/api/biblioDetail/{biblio_id}"
@@ -54,7 +54,7 @@ def convert_kokusho(url: str, output_dir: Path, *, bilingual: bool = False, ocr:
         detail_data = res.json()
     except Exception as e:
         logger.error(f"Failed to fetch detail data: {e}")
-        return
+        return None
 
     title = detail_data.get("hshomeipdf", "") or detail_data.get(
         "hshomei", f"国書データベース_{biblio_id}"

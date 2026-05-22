@@ -103,7 +103,7 @@ def extract_with_llm(
 
         frontmatter = generate_frontmatter(
             title=title,
-            url=url,
+            url=url or "",
             tags=tags,
             extra=extra,
         )

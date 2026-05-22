@@ -132,7 +132,7 @@ def _fetch_transcript(video_id: str) -> list[dict[str, Any]] | None:
                 api_legacy2: Any = YouTubeTranscriptApi
                 return list(api_legacy2.get_transcript(video_id, languages=["ja", "en"]))
             else:
-                api_new2 = YouTubeTranscriptApi(http_client=session)
+                api_new2: Any = YouTubeTranscriptApi(http_client=session)
                 return list(api_new2.fetch(video_id, languages=("ja", "en")))
         except Exception as e2:
             logger.error(f"Failed to fetch YouTube transcript: {e} / {e2}")

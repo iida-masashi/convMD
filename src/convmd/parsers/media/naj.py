@@ -10,7 +10,7 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
-def convert_naj(url: str, output_dir: Path, *, ocr: bool = False) -> None:
+def convert_naj(url: str, output_dir: Path, *, ocr: bool = False) -> Path | None:
     parts = [p for p in url.strip("/").split("/") if p]
     item_id = None
     if "img" in parts:
@@ -28,7 +28,7 @@ def convert_naj(url: str, output_dir: Path, *, ocr: bool = False) -> None:
 
     if not item_id:
         logger.error(f"Could not extract item ID from: {url}")
-        return
+        return None
 
     logger.info(f"Processing NAJ Item ID: {item_id}")
     manifest_api = f"https://www.digital.archives.go.jp/api/iiif/{item_id}/manifest.json"
@@ -54,7 +54,7 @@ def convert_naj(url: str, output_dir: Path, *, ocr: bool = False) -> None:
     )
     if not images_markdown:
         logger.warning(f"Failed to process IIIF images for {url}")
-        return
+        return None
 
     frontmatter = generate_frontmatter(
         title=title,

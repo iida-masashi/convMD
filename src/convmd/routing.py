@@ -12,7 +12,7 @@ from __future__ import annotations
 import importlib
 import logging
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, cast
 from urllib.parse import ParseResult, urlparse
 
 from convmd.cli_args import RunConfig
@@ -30,7 +30,7 @@ def _has_domain(*needles: str) -> Predicate:
     return check
 
 
-def _dynamic_call(module: str, func: str, *args, **kwargs):
+def _dynamic_call(module: str, func: str, *args: Any, **kwargs: Any) -> Any:
     mod = importlib.import_module(module)
     fn = getattr(mod, func)
     return fn(*args, **kwargs)
@@ -44,7 +44,7 @@ def _route(predicate: Predicate, module: str, func: str, log_message: str | None
         if log_message:
             logger.info(log_message)
         kwargs = {k: getattr(cfg, k) for k in pass_cfg_kwargs}
-        return _dynamic_call(module, func, url, out, **kwargs)
+        return cast("Path | None", _dynamic_call(module, func, url, out, **kwargs))
 
     return predicate, handler
 
@@ -54,10 +54,14 @@ def _route_note(predicate: Predicate) -> tuple[Predicate, Handler]:
         parts = p.path.strip("/").split("/")
         if len(parts) == 1:
             logger.info("Detected note.com creator profile. Fetching all notes...")
-            return _dynamic_call("convmd.parsers.sns.note", "convert_note_com", parts[0], out)
+            return cast(
+                "Path | None",
+                _dynamic_call("convmd.parsers.sns.note", "convert_note_com", parts[0], out),
+            )
         else:
-            return _dynamic_call(
-                "convmd.parsers.general", "convert_general_website", url, out
+            return cast(
+                "Path | None",
+                _dynamic_call("convmd.parsers.general", "convert_general_website", url, out),
             )
 
     return predicate, handler
@@ -69,7 +73,10 @@ def _route_twitter(predicate: Predicate) -> tuple[Predicate, Handler]:
         if parts:
             screen_name = parts[0]
             logger.info(f"Detected X.com account: @{screen_name}. Fetching recent tweets...")
-            return _dynamic_call("convmd.parsers.sns.twitter", "convert_twitter", screen_name, out)
+            return cast(
+                "Path | None",
+                _dynamic_call("convmd.parsers.sns.twitter", "convert_twitter", screen_name, out),
+            )
         return None
 
     return predicate, handler
@@ -186,7 +193,10 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
 
     def fallback_handler(url: str, _p: ParseResult, out: Path, _cfg: RunConfig) -> Path | None:
         logger.info("Falling back to general website extraction...")
-        return _dynamic_call("convmd.parsers.general", "convert_general_website", url, out)
+        return cast(
+            "Path | None",
+            _dynamic_call("convmd.parsers.general", "convert_general_website", url, out),
+        )
 
     routes.append((lambda _p: True, fallback_handler))
     return routes

@@ -7,6 +7,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from convmd.core.http import get_json
 from convmd.core.utils import generate_frontmatter, sanitize_filename
@@ -22,7 +23,7 @@ def _auth_headers() -> dict[str, str]:
     return headers
 
 
-def _api(endpoint: str):
+def _api(endpoint: str) -> Any | None:
     return get_json(f"https://api.github.com{endpoint}", headers=_auth_headers())
 
 
