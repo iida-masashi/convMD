@@ -35,6 +35,8 @@ class RunConfig:
     no_cache: bool = False
     show_cost: bool = True
     podcast_limit: int = 1
+    normalize_tags: bool = False
+    tag_similarity_cutoff: float = 0.85
     extra: dict = field(default_factory=dict)
 
 
@@ -60,6 +62,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--no-cost", dest="show_cost", action="store_false")
     parser.add_argument("--podcast-limit", type=int, default=1)
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="Path to an explicit YAML config file (overrides ~/.convmd.yaml and ./.convmd.yaml).",
+    )
+    parser.add_argument(
+        "--normalize-tags",
+        action="store_true",
+        help="Normalize generated tags against existing tags in --obsidian-vault.",
+    )
+    parser.add_argument(
+        "--tag-similarity-cutoff",
+        type=float,
+        default=0.85,
+        help="Fuzzy match cutoff for tag normalization (0.0-1.0, default 0.85).",
+    )
     return parser
 
 
@@ -112,4 +131,6 @@ def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
         no_cache=_typed(args, "no_cache", False, bool),
         show_cost=_typed(args, "show_cost", True, bool),
         podcast_limit=_typed(args, "podcast_limit", 1, int),
+        normalize_tags=_typed(args, "normalize_tags", False, bool),
+        tag_similarity_cutoff=_typed(args, "tag_similarity_cutoff", 0.85, float),
     )

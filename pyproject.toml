@@ -15,6 +15,7 @@ dependencies = [
     "google-genai>=2.0.1",
     "pillow>=12.2.0",
     "notebooklm-py>=0.4.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -30,6 +31,7 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "types-requests>=2.31",
+    "types-pyyaml>=6.0",
 ]
 
 [tool.ruff]

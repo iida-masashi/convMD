@@ -76,8 +76,17 @@ def transform_markdown_with_gemini(file_path: Path, instruction: str) -> Path | 
     return _run_and_save(prompt, out_path, "Transformation")
 
 
-def apply_obsidian_links(file_path: Path) -> Path | None:
-    """Auto-link important keywords as [[wikilinks]] and inject tags."""
+def apply_obsidian_links(
+    file_path: Path,
+    *,
+    vault_path: Path | None = None,
+    tag_similarity_cutoff: float = 0.85,
+) -> Path | None:
+    """Auto-link important keywords as [[wikilinks]] and inject tags.
+
+    When ``vault_path`` is provided, generated tags are normalized against the
+    set of tags already present in the vault before being injected.
+    """
     if not gemini.is_configured():
         return None
 
@@ -101,6 +110,12 @@ def apply_obsidian_links(file_path: Path) -> Path | None:
         raw_tags = tag_line.replace('TAGS:', '').split(',')
         tags = [t.strip() for t in raw_tags if t.strip()]
         text = '\n'.join(lines)
+
+    if tags and vault_path is not None:
+        from convmd.integrations.vault_tags import normalize_tags, scan_vault_tags
+
+        existing = scan_vault_tags(vault_path)
+        tags = normalize_tags(tags, existing, cutoff=tag_similarity_cutoff)
 
     # Inject tags into frontmatter
     if tags:

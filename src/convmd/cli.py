@@ -16,6 +16,7 @@ from pathlib import Path
 
 from convmd.cli_args import build_parser, to_run_config
 from convmd.config import get_output_dir
+from convmd.config_file import load_config
 from convmd.core.transform import transform_markdown_with_gemini  # noqa: F401 — test patch surface
 from convmd.integrations.notebooklm import upload_to_notebooklm  # noqa: F401 — test patch surface
 from convmd.pipeline import process_target, run_pipeline  # noqa: F401 — test patch surface
@@ -38,6 +39,16 @@ def _resolve_output_dir(args: argparse.Namespace) -> Path:
     return get_output_dir(Path(output_dir) if output_dir else None)
 
 
+def _sniff_config_flag(argv: list[str]) -> Path | None:
+    """Pre-scan argv for ``--config <path>`` or ``--config=<path>`` without invoking argparse."""
+    for i, token in enumerate(argv):
+        if token == "--config" and i + 1 < len(argv):
+            return Path(argv[i + 1])
+        if token.startswith("--config="):
+            return Path(token.split("=", 1)[1])
+    return None
+
+
 def _maybe_run_find_subcommand() -> bool:
     """If the user invoked ``convmd find <query>``, handle it and return True."""
     if len(sys.argv) > 1 and sys.argv[1] == "find":
@@ -56,6 +67,14 @@ def main() -> None:
         return
 
     parser = build_parser()
+    # Two-pass parse so YAML config can populate defaults before the real parse.
+    # We sniff --config manually rather than calling parse_known_args(), because
+    # the latter still validates the choice-typed flags (e.g. --format) and would
+    # fail under tests that monkeypatch parse_args() but leave sys.argv alone.
+    explicit_config = _sniff_config_flag(sys.argv[1:])
+    yaml_defaults = load_config(explicit_config)
+    if yaml_defaults:
+        parser.set_defaults(**yaml_defaults)
     args = parser.parse_args()
 
     output_dir = _resolve_output_dir(args)

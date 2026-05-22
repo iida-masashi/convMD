@@ -129,9 +129,14 @@ def link_phase(files: list[Path], cfg: RunConfig) -> list[Path]:
         return list(files)
     from convmd.core.transform import apply_obsidian_links
 
+    vault = cfg.obsidian_vault if cfg.normalize_tags else None
     out: list[Path] = []
     for md_file in files:
-        linked = apply_obsidian_links(md_file)
+        linked = apply_obsidian_links(
+            md_file,
+            vault_path=vault,
+            tag_similarity_cutoff=cfg.tag_similarity_cutoff,
+        )
         out.append(linked if linked else md_file)
     return out
 

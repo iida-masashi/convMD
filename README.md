@@ -158,6 +158,37 @@ uv run python -m convmd.cli https://zenn.dev/.../slug --format json   # 構造�
 uv run python -m convmd.cli ./output/*.md --format epub               # pandoc 必須
 ```
 
+### YAML 設定ファイル (`--config`)
+CLI 引数が多くなる場合、YAML ファイルにデフォルトを書いておけます。優先度は **CLI 引数 > `--config <path>` > `./.convmd.yaml` > `~/.convmd.yaml`** です。
+
+```yaml
+# ~/.convmd.yaml もしくは ./.convmd.yaml
+obsidian_vault: ~/Obsidian/MyVault
+output_dir: ./output
+auto_link: true
+normalize_tags: true
+tag_similarity_cutoff: 0.9
+slack_webhook: https://hooks.slack.com/services/...
+podcast_limit: 3
+```
+
+キー名は CLI のフラグ名(`--obsidian-vault` → `obsidian_vault`)と同じ snake_case を使います。未知のキーは警告ログを出して無視されます。
+
+### Obsidian Vault のタグ正規化 (`--normalize-tags`)
+`--auto-link` で AI 生成タグを使う際、`--normalize-tags` を有効にすると **既存 Vault のタグ集合と照合してタグを正規化** します。
+
+- 大文字小文字違い: `python` → `Python`(既存 Vault の表記に統一)
+- ハイフン/アンダースコア違い: `machine_learning` → `machine-learning`
+- 日本語タグ: 完全一致のみ(fuzzy マッチによる誤マージを回避)
+
+しきい値は `--tag-similarity-cutoff 0.85`(既定)で調整できます。`0.0–1.0`、高いほど厳密。
+
+```bash
+uv run python -m convmd.cli https://example.com/article \
+    --auto-link --normalize-tags \
+    --obsidian-vault ~/Obsidian/MyVault
+```
+
 ### TLS 設定
 既定では証明書検証が有効です。社内ネットワーク等で必要な場合に限り、環境変数 `CONVMD_INSECURE_SSL=1` で検証を無効化できます。
 
