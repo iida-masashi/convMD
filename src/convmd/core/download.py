@@ -21,6 +21,30 @@ from convmd.core.http import _verify_default, encode_url_path
 logger = logging.getLogger(__name__)
 
 
+_META_CHARSET_RE = re.compile(
+    rb"""<meta[^>]+charset\s*=\s*["']?([\w\-]+)""", re.IGNORECASE
+)
+
+
+def _detect_html_charset(content: bytes, http_charset: str | None) -> str:
+    """Resolve charset from HTML meta tag, then HTTP header, then fallbacks.
+
+    httpx returns ISO-8859-1 when the HTTP header has no charset, which mangles
+    Shift_JIS / EUC-JP pages. Prefer the in-document declaration.
+    """
+    m = _META_CHARSET_RE.search(content[:4096])
+    if m:
+        return m.group(1).decode("ascii", errors="ignore")
+    if http_charset and http_charset.lower() not in {"iso-8859-1", "ascii"}:
+        return http_charset
+    # Try utf-8 first; if it fails, fall back to cp932 (Windows Japanese).
+    try:
+        content.decode("utf-8")
+        return "utf-8"
+    except UnicodeDecodeError:
+        return "cp932"
+
+
 def fetch_html(url: str) -> str | None:
     """Fetch HTML content from a URL with safe path encoding and charset fallback."""
     encoded_url = encode_url_path(url)
@@ -31,7 +55,7 @@ def fetch_html(url: str) -> str | None:
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             response = client.get(encoded_url, headers=headers)
             response.raise_for_status()
-            charset = response.encoding or "utf-8"
+            charset = _detect_html_charset(response.content, response.charset_encoding)
             return response.content.decode(charset, errors="replace")
     except httpx.RequestError as e:
         logger.error(f"Failed to request {url}: {e}")
