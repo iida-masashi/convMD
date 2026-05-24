@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import urllib.parse
+from pathlib import Path
 from typing import Any, Mapping
 
 import httpx
@@ -89,3 +90,23 @@ def get_html(url: str, *, timeout: float = DEFAULT_TIMEOUT) -> str | None:
     except Exception as e:
         logger.error(f"Failed to request {url}: {e}")
         return None
+
+
+def download_binary(url: str, dest: Path, *, timeout: float = DEFAULT_TIMEOUT) -> bool:
+    """GET a URL and stream the body to ``dest``. Returns True on success."""
+    encoded_url = encode_url_path(url)
+    try:
+        with get_client(timeout=timeout) as client:
+            with client.stream("GET", encoded_url, headers=_default_headers()) as response:
+                response.raise_for_status()
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with dest.open("wb") as fh:
+                    for chunk in response.iter_bytes():
+                        fh.write(chunk)
+        return True
+    except httpx.HTTPStatusError as e:
+        logger.error(f"HTTP error {e.response.status_code} downloading {url}")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to download {url}: {e}")
+        return False

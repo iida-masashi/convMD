@@ -191,6 +191,36 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
 
     routes.append((is_rss, podcast_handler))
 
+    _OFFICE_SUFFIXES = (".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls")
+
+    def is_office_url(p: ParseResult) -> bool:
+        return p.path.lower().endswith(_OFFICE_SUFFIXES)
+
+    def office_url_handler(url: str, p: ParseResult, out: Path, cfg: RunConfig) -> Path | None:
+        import tempfile
+        import urllib.parse
+        from pathlib import Path as _P
+
+        from convmd.core.http import download_binary
+        from convmd.parsers.office import convert_office_file
+
+        suffix = _P(p.path).suffix.lower()
+        filename = _P(urllib.parse.unquote(p.path)).name or f"download{suffix}"
+        logger.info(f"Detected {suffix.upper()} URL. Downloading and processing via markitdown...")
+        with tempfile.TemporaryDirectory() as td:
+            local = _P(td) / filename
+            if not download_binary(url, local):
+                logger.error(f"Failed to download {url}")
+                return None
+            return convert_office_file(
+                local,
+                out,
+                ai_extract=cfg.ai_extract if cfg else False,
+                schema=cfg.schema if cfg else None,
+            )
+
+    routes.append((is_office_url, office_url_handler))
+
     def fallback_handler(url: str, _p: ParseResult, out: Path, _cfg: RunConfig) -> Path | None:
         logger.info("Falling back to general website extraction...")
         return cast(
