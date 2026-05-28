@@ -7,6 +7,7 @@ continue to work without churn.
 
 from __future__ import annotations
 
+import codecs
 import logging
 import re
 import urllib.parse
@@ -26,6 +27,20 @@ _META_CHARSET_RE = re.compile(
 )
 
 
+def _is_valid_codec(name: str) -> bool:
+    """Return True iff ``name`` resolves to a real Python codec.
+
+    Guards against bogus meta declarations like ``<meta charset="unicode">`` —
+    ``bytes.decode(name, errors="replace")`` raises ``LookupError`` for unknown
+    codec names (the ``errors`` kwarg only rescues malformed bytes, not lookup).
+    """
+    try:
+        codecs.lookup(name)
+        return True
+    except LookupError:
+        return False
+
+
 def _detect_html_charset(content: bytes, http_charset: str | None) -> str:
     """Resolve charset from HTML meta tag, then HTTP header, then fallbacks.
 
@@ -34,8 +49,12 @@ def _detect_html_charset(content: bytes, http_charset: str | None) -> str:
     """
     m = _META_CHARSET_RE.search(content[:4096])
     if m:
-        return m.group(1).decode("ascii", errors="ignore")
-    if http_charset and http_charset.lower() not in {"iso-8859-1", "ascii"}:
+        candidate = m.group(1).decode("ascii", errors="ignore")
+        if candidate and _is_valid_codec(candidate):
+            return candidate
+    if http_charset and http_charset.lower() not in {"iso-8859-1", "ascii"} and _is_valid_codec(
+        http_charset
+    ):
         return http_charset
     # Try utf-8 first; if it fails, fall back to cp932 (Windows Japanese).
     try:

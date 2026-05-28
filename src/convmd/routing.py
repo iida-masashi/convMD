@@ -22,6 +22,20 @@ logger = logging.getLogger(__name__)
 Predicate = Callable[[ParseResult], bool]
 Handler = Callable[[str, ParseResult, Path, RunConfig], Path | None]
 
+# Module-scope so dispatch_url can also consult it to keep binary URLs out of
+# the text-decoding LLM fallback paths.
+_OFFICE_SUFFIXES: tuple[str, ...] = (".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls")
+
+
+def _is_binary_url(target_url: str) -> bool:
+    """True iff the URL path ends in a known binary office/PDF suffix.
+
+    ``get_html`` would force-decode such bodies as text (mojibake), so the
+    ``--ai-extract`` shortcut and semantic-fallback branches must skip them
+    and let the office route handle the download.
+    """
+    return urlparse(target_url).path.lower().endswith(_OFFICE_SUFFIXES)
+
 
 def _has_domain(*needles: str) -> Predicate:
     def check(p: ParseResult) -> bool:
@@ -191,8 +205,6 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
 
     routes.append((is_rss, podcast_handler))
 
-    _OFFICE_SUFFIXES = (".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls")
-
     def is_office_url(p: ParseResult) -> bool:
         return p.path.lower().endswith(_OFFICE_SUFFIXES)
 
@@ -247,8 +259,11 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
     if cfg is None:
         cfg = RunConfig(target=target_url, output_dir=output_dir)
 
-    # Force AI extract if requested
-    if cfg.ai_extract:
+    # Force AI extract if requested — but skip for binary office/PDF URLs,
+    # where get_html would force-decode the body as text and feed garbage to
+    # the LLM. Those fall through to the office route, which downloads via
+    # download_binary and runs markitdown (which itself honors ai_extract).
+    if cfg.ai_extract and not _is_binary_url(target_url):
         from convmd.core.http import get_html
         from convmd.core.llm_extractor import extract_with_llm
 
@@ -258,13 +273,20 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
             return
 
     parsed = urlparse(target_url)
+    is_binary = _is_binary_url(target_url)
     for predicate, handler in _routes():
         if predicate(parsed):
             try:
                 res_path = handler(target_url, parsed, output_dir, cfg)
 
-                # Semantic Fallback: if result is too small, try AI
-                if res_path and res_path.exists() and res_path.stat().st_size < 200:
+                # Semantic Fallback: if result is too small, try AI.
+                # Skip for binary URLs — get_html would decode bytes as text.
+                if (
+                    res_path
+                    and res_path.exists()
+                    and res_path.stat().st_size < 200
+                    and not is_binary
+                ):
                     logger.info(f"Extraction result for {target_url} seems too small. Trying AI...")
                     from convmd.core.http import get_html
                     from convmd.core.llm_extractor import extract_with_llm
@@ -275,6 +297,9 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
 
             except Exception:
                 logger.exception(f"Handler failed for {target_url}")
+                if is_binary:
+                    # Same reason: don't feed decoded binary to the LLM.
+                    return
                 # Fallback to AI extraction on failure
                 from convmd.core.http import get_html
                 from convmd.core.llm_extractor import extract_with_llm

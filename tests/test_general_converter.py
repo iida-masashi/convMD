@@ -8,6 +8,7 @@ def test_fetch_html_encoding(mock_client_class):
     # Mock httpx.Client.get
     mock_response = MagicMock()
     mock_response.encoding = "utf-8"
+    mock_response.charset_encoding = "utf-8"
     mock_response.content = b"<html><body>Test</body></html>"
 
     mock_client_instance = MagicMock()
