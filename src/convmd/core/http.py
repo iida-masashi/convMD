@@ -75,12 +75,21 @@ def encode_url_path(url: str) -> str:
     return parsed._replace(path=encoded_path).geturl()
 
 
-def get_html(url: str, *, timeout: float = DEFAULT_TIMEOUT) -> str | None:
-    """GET a URL and decode response text safely with charset fallback."""
+def get_html(
+    url: str,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    headers: Mapping[str, str] | None = None,
+) -> str | None:
+    """GET a URL and decode response text safely with charset fallback.
+
+    Extra ``headers`` are merged into the default headers (notably overriding
+    ``User-Agent`` for sites like Wikipedia that reject the default UA).
+    """
     encoded_url = encode_url_path(url)
     try:
         with get_client(timeout=timeout) as client:
-            response = client.get(encoded_url, headers=_default_headers())
+            response = client.get(encoded_url, headers=_default_headers(headers))
             response.raise_for_status()
             charset = response.encoding or "utf-8"
             return response.content.decode(charset, errors="replace")

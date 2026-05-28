@@ -23,24 +23,10 @@ def fetch_wikipedia_html(title: str, lang: str = "ja") -> str | None:
     # https://meta.wikimedia.org/wiki/User-Agent_policy and hit the regular
     # article URL (the REST endpoint is even stricter).
     url = f"https://{lang}.wikipedia.org/wiki/{title}"
-    import httpx
-
-    from convmd.constants import DEFAULT_TIMEOUT
-
-    try:
-        with httpx.Client(
-            follow_redirects=True,
-            timeout=DEFAULT_TIMEOUT,
-            headers={
-                "User-Agent": "convmd/0.1 (+https://github.com/iida-masashi/convMD)"
-            },
-        ) as client:
-            r = client.get(url)
-            r.raise_for_status()
-            return r.text
-    except Exception as e:
-        logger.error(f"Wikipedia fetch failed for {url}: {e}")
-        return None
+    return get_html(
+        url,
+        headers={"User-Agent": "convmd/0.1 (+https://github.com/iida-masashi/convMD)"},
+    )
 
 
 def clean_wikipedia_html(html_content: str) -> str:
