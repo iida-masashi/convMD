@@ -16,6 +16,9 @@ dependencies = [
     "pillow>=12.2.0",
     "notebooklm-py>=0.4.0",
     "pyyaml>=6.0",
+    "yt-dlp>=2026.3.17",
+    "chromadb>=1.5.9",
+    "playwright",
 ]
 
 [project.scripts]
@@ -32,6 +35,8 @@ dev = [
     "mypy>=1.10.0",
     "types-requests>=2.31",
     "types-pyyaml>=6.0",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.ruff]

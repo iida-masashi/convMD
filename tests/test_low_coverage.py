@@ -17,7 +17,7 @@ from convmd.parsers.sns import youtube
 def test_general_website_success(mock_fetch, _mock_imgs, tmp_path):
     mock_fetch.return_value = (
         "<html><head><title>Page</title></head>"
-        "<body><article><h1>Page</h1><p>Article body content paragraph.</p></article></body></html>"
+        "<body><article><h1>Page</h1><p>Article body content paragraph. This paragraph needs to be long enough to pass the length check. Let's add some more words here so that the extracted markdown is definitely longer than 100 characters. That should do the trick and fix the test failure.</p></article></body></html>"
     )
     out = general.convert_general_website("https://example.com/p", tmp_path)
     assert out is not None

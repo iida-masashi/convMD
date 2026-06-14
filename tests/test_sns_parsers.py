@@ -3,7 +3,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from convmd.parsers.sns import note, twitter
+from convmd.parsers.sns import grok, note, twitter
 
 # --- note.com ---
 
@@ -123,3 +123,56 @@ def test_twitter_no_tweets(mock_get_client, tmp_path):
 @patch("convmd.parsers.sns.twitter.get_client", side_effect=Exception("network"))
 def test_twitter_network_error(_mock_client, tmp_path):
     assert twitter.convert_twitter("u", tmp_path) is None
+
+
+# --- grok (X via xAI Agent Tools) ---
+
+def _grok_response(text):
+    return {
+        "output": [{"type": "message", "content": [{"text": text}]}],
+        "usage": {"cost_in_usd_ticks": 150000000},
+    }
+
+
+@patch.dict("os.environ", {"XAI_API_KEY": "test-key"})
+@patch("convmd.parsers.sns.grok.get_client")
+def test_grok_posts(mock_get_client, tmp_path):
+    mock_response = MagicMock()
+    mock_response.json.return_value = _grok_response(
+        "**投稿日時**: Wed, 03 Jun 2026 02:31:30 GMT  \n"
+        "**本文**: 弧帯文の原型を勉強中です。  \n"
+        "**投稿URL**: https://x.com/u/status/111"
+    )
+    mock_response.raise_for_status = MagicMock()
+    mock_client = MagicMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__enter__.return_value = mock_client
+    mock_get_client.return_value = mock_client
+
+    out = grok.convert_grok("u", tmp_path)
+    assert out is not None
+    text = out.read_text(encoding="utf-8")
+    assert "弧帯文の原型を勉強中です" in text
+    assert "evidence_type: \"ai_mediated\"" in text
+    assert "要検証" in text
+    # raw JSON anchor is persisted alongside the MD
+    assert (tmp_path / "u_grok_raw.json").exists()
+
+
+@patch.dict("os.environ", {}, clear=True)
+def test_grok_no_key(tmp_path):
+    assert grok.convert_grok("u", tmp_path) is None
+
+
+@patch.dict("os.environ", {"XAI_API_KEY": "test-key"})
+@patch("convmd.parsers.sns.grok.get_client")
+def test_grok_empty_output(mock_get_client, tmp_path):
+    mock_response = MagicMock()
+    mock_response.json.return_value = _grok_response("")
+    mock_response.raise_for_status = MagicMock()
+    mock_client = MagicMock()
+    mock_client.post.return_value = mock_response
+    mock_client.__enter__.return_value = mock_client
+    mock_get_client.return_value = mock_client
+
+    assert grok.convert_grok("u", tmp_path) is None

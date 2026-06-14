@@ -153,6 +153,27 @@ def summary_phase(files: list[Path], cfg: RunConfig) -> Path | None:
     return generate_executive_summary(combined, cfg.output_dir)
 
 
+def embed_phase(files: list[Path], cfg: RunConfig) -> None:
+    """Upsert generated markdown files into ChromaDB for semantic search."""
+    valid_files = [f for f in files if f.exists() and not f.name.endswith(Suffix.DIFF)]
+    if not valid_files:
+        return
+
+    try:
+        from convmd.core.vector_db import ChromaManager
+        manager = ChromaManager(cfg.output_dir)
+        for path in valid_files:
+            try:
+                body = path.read_text(encoding="utf-8")
+                manager.upsert_document(path, body)
+            except OSError as e:
+                logger.warning(f"Could not read {path.name} for embedding: {e}")
+    except ImportError:
+        logger.warning("chromadb not installed. Skipping embedding phase.")
+    except Exception as e:
+        logger.error(f"Embedding phase failed: {e}")
+
+
 def dispatch_phase(files: list[Path], summary_path: Path | None, cfg: RunConfig) -> None:
     import os
 
@@ -249,6 +270,7 @@ def run_once(cfg: RunConfig) -> None:
     summary_path = summary_phase(files, cfg)
     if summary_path:
         files_with_summary.append(summary_path)
+    embed_phase(files_with_summary, cfg)
     dispatch_phase(files_with_summary, summary_path, cfg)
 
 

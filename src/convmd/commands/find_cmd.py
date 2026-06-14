@@ -81,6 +81,50 @@ def _python_search(query: str, root: Path, *, ignore_case: bool, limit: int,
 
 def run_find(args: argparse.Namespace) -> None:
     root = args.search_dir.resolve() if args.search_dir else get_output_dir()
+
+    if getattr(args, "semantic", False):
+        try:
+            from convmd.core.vector_db import ChromaManager
+            manager = ChromaManager(root)
+
+            results = manager.search(args.query, limit=args.limit * 3) # Fetch more to allow for filtering
+
+            if not results:
+                print(f"No semantic matches found for '{args.query}' in {root}")
+                return
+
+            filtered_results = []
+            for res in results:
+                meta = res["metadata"]
+
+                # Apply manual metadata filters
+                if getattr(args, "domain", None) and args.domain not in meta.get("original_url", ""):
+                    continue
+                if getattr(args, "title", None) and args.title not in meta.get("title", ""):
+                    continue
+
+                filtered_results.append(res)
+                if len(filtered_results) >= args.limit:
+                    break
+
+            if not filtered_results:
+                print(f"No semantic matches passed the domain/title filters for '{args.query}' in {root}")
+                return
+
+            for res in filtered_results:
+                meta = res["metadata"]
+                dist = res["distance"]
+                doc = res["document"]
+                source = meta.get("source", "Unknown")
+                title = meta.get("title", Path(source).name)
+                # Print snippet safely
+                snippet = doc[:150].replace("\n", " ") + "..." if len(doc) > 150 else doc.replace("\n", " ")
+                print(f"[{title}] (Distance: {dist:.4f})\n  File: {source}\n  Snippet: {snippet}\n")
+            return
+        except ImportError:
+            logger.error("chromadb is not installed. Run 'uv add chromadb' to enable semantic search.")
+            return
+
     use_rg = shutil.which("rg") is not None and not args.frontmatter_only
 
     if use_rg:

@@ -15,3 +15,6 @@ cookies.txt
 *_raw.md
 .coverage
 htmlcov/
+
+# Local config
+.convmd.yaml

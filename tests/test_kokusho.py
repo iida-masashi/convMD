@@ -1,13 +1,13 @@
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 from convmd.parsers.media.kokusho import convert_kokusho
 
 
 @patch("convmd.parsers.media.kokusho.httpx.get")
 @patch("convmd.parsers.media.kokusho.process_iiif_manifest")
-@patch("builtins.open", new_callable=mock_open)
-def test_convert_kokusho_success(mock_file_open, mock_process_iiif, mock_get, tmp_path):
+@patch("pathlib.Path.write_text")
+def test_convert_kokusho_success(mock_write_text, mock_process_iiif, mock_get, tmp_path):
     # Setup mock for detail API
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -36,12 +36,10 @@ def test_convert_kokusho_success(mock_file_open, mock_process_iiif, mock_get, tm
     )
     mock_process_iiif.assert_called_once()
 
-    mock_file_open.assert_called_once()
+    mock_write_text.assert_called_once()
 
     # Check what was written to the file
-    written_content = "".join(
-        call.args[0] for call in mock_file_open.return_value.write.call_args_list
-    )
+    written_content = mock_write_text.call_args[0][0]
     assert 'title: "Test Title"' in written_content
     assert 'author: "Test Author"' in written_content
     assert 'biblio_id: "12345"' in written_content

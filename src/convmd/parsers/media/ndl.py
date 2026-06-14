@@ -111,6 +111,5 @@ def convert_ndl(url: str, output_dir: Path, *, ocr: bool = False, **kwargs: Any)
     else:
         md_path = output_dir / f"{safe_title}.md"
 
-    with open(md_path, "w", encoding="utf-8") as f:
-        f.write(md_content)
+    md_path.write_text(md_content, encoding="utf-8")
     logger.info(f"Saved to {md_path}")

@@ -16,8 +16,8 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from convmd.constants import DEFAULT_TIMEOUT, DOWNLOAD_TIMEOUT, USER_AGENT
-from convmd.core.http import _verify_default, encode_url_path
+from convmd.constants import DOWNLOAD_TIMEOUT, USER_AGENT
+from convmd.core.http import _verify_default
 
 logger = logging.getLogger(__name__)
 
@@ -64,24 +64,10 @@ def _detect_html_charset(content: bytes, http_charset: str | None) -> str:
         return "cp932"
 
 
-def fetch_html(url: str) -> str | None:
+def fetch_html(url: str, render_js: bool = False) -> str | None:
     """Fetch HTML content from a URL with safe path encoding and charset fallback."""
-    encoded_url = encode_url_path(url)
-    try:
-        with httpx.Client(
-            follow_redirects=True, timeout=DEFAULT_TIMEOUT, verify=_verify_default()
-        ) as client:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            response = client.get(encoded_url, headers=headers)
-            response.raise_for_status()
-            charset = _detect_html_charset(response.content, response.charset_encoding)
-            return response.content.decode(charset, errors="replace")
-    except httpx.RequestError as e:
-        logger.error(f"Failed to request {url}: {e}")
-        return None
-    except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error {e.response.status_code} for {url}")
-        return None
+    from convmd.core.http import get_html
+    return get_html(url, render_js=render_js)
 
 
 _IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")

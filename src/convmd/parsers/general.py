@@ -10,13 +10,13 @@ from convmd.core.utils import generate_frontmatter, sanitize_filename
 logger = logging.getLogger(__name__)
 
 
-def convert_general_website(url: str, output_dir: Path) -> Path | None:
+def convert_general_website(url: str, output_dir: Path, render_js: bool = False) -> Path | None:
     """
     Fetches a general URL, extracts main content via Readability,
     and saves it as a Markdown file with local images.
     """
     logger.info(f"Processing {url} with Readability engine...")
-    html = fetch_html(url)
+    html = fetch_html(url, render_js=render_js)
     if not html:
         logger.error(f"Failed to retrieve HTML for {url}")
         return None
@@ -32,6 +32,12 @@ def convert_general_website(url: str, output_dir: Path) -> Path | None:
     # Download images and update links
     logger.info("Downloading images and updating links...")
     md_body = process_images(md_body, url, output_dir)
+
+    # If the extracted body is extremely short, it's likely a failure of Readability
+    # Return None to trigger AI fallback in routing.py
+    if len(md_body.strip()) < 100:
+        logger.warning(f"Readability extracted very little content ({len(md_body.strip())} bytes) for {url}. Returning None to trigger AI fallback.")
+        return None
 
     # Generate frontmatter
     frontmatter = generate_frontmatter(title, url, tags=["web_clip", "general"])

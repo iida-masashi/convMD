@@ -37,6 +37,7 @@ class RunConfig:
     podcast_limit: int = 1
     normalize_tags: bool = False
     tag_similarity_cutoff: float = 0.85
+    render_js: bool = False
     extra: dict = field(default_factory=dict)
 
 
@@ -79,6 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.85,
         help="Fuzzy match cutoff for tag normalization (0.0-1.0, default 0.85).",
     )
+    parser.add_argument(
+        "--render-js",
+        action="store_true",
+        help="Use Playwright to render JavaScript before extracting HTML.",
+    )
     return parser
 
 
@@ -90,6 +96,9 @@ def build_find_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("-i", "--ignore-case", action="store_true")
     parser.add_argument("--frontmatter-only", action="store_true")
+    parser.add_argument("-s", "--semantic", action="store_true", help="Perform semantic search using ChromaDB and embeddings")
+    parser.add_argument("--domain", type=str, default=None, help="Filter semantic search by source domain/string")
+    parser.add_argument("--title", type=str, default=None, help="Filter semantic search by title string")
     return parser
 
 
@@ -133,4 +142,5 @@ def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
         podcast_limit=_typed(args, "podcast_limit", 1, int),
         normalize_tags=_typed(args, "normalize_tags", False, bool),
         tag_similarity_cutoff=_typed(args, "tag_similarity_cutoff", 0.85, float),
+        render_js=_typed(args, "render_js", False, bool),
     )

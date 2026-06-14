@@ -75,24 +75,83 @@ def encode_url_path(url: str) -> str:
     return parsed._replace(path=encoded_path).geturl()
 
 
+def get_html_with_js(url: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
+    """GET a URL and return fully rendered HTML using Playwright."""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(user_agent=USER_AGENT)
+            page = context.new_page()
+            encoded_url = encode_url_path(url)
+            page.goto(encoded_url, wait_until="networkidle", timeout=int(timeout * 1000))
+            content = page.content()
+            browser.close()
+            return content
+    except ImportError:
+        logger.error("Playwright not installed. Run 'uv add playwright' to use --render-js.")
+        return None
+    except Exception as e:
+        logger.error(f"Playwright failed for {url}: {e}")
+        return None
+
+
+def is_spa_empty(html: str) -> bool:
+    """Heuristic to detect if the HTML is an empty SPA shell or highly JS-dependent."""
+    # Very short HTML is suspicious
+    if len(html) < 1000:
+        return True
+
+    import re
+    # Check for known SPA framework signatures
+    if re.search(r'id="__nuxt"', html) or re.search(r'id="__next"', html) or re.search(r'window\.__NUXT__', html):
+        return True
+
+    # Check for common SPA root tags with very little content inside
+    body_content = re.search(r'<body[^>]*>(.*?)</body>', html, re.IGNORECASE | re.DOTALL)
+    if body_content:
+        # Strip script tags inside body to see real content length
+        real_content = re.sub(r'<script[^>]*>.*?</script>', '', body_content.group(1), flags=re.IGNORECASE | re.DOTALL)
+        # Strip noscript tags
+        real_content = re.sub(r'<noscript[^>]*>.*?</noscript>', '', real_content, flags=re.IGNORECASE | re.DOTALL)
+        # Strip generic div/span tags to see if there's actual text
+        text_content = re.sub(r'<[^>]+>', '', real_content)
+        if len(text_content.strip()) < 500:
+            return True
+
+    return False
+
 def get_html(
     url: str,
     *,
     timeout: float = DEFAULT_TIMEOUT,
     headers: Mapping[str, str] | None = None,
+    render_js: bool = False,
 ) -> str | None:
     """GET a URL and decode response text safely with charset fallback.
 
     Extra ``headers`` are merged into the default headers (notably overriding
     ``User-Agent`` for sites like Wikipedia that reject the default UA).
     """
+    if render_js:
+        logger.info(f"Using Playwright for explicit JS rendering: {url}")
+        return get_html_with_js(url, timeout=timeout)
+
     encoded_url = encode_url_path(url)
     try:
         with get_client(timeout=timeout) as client:
             response = client.get(encoded_url, headers=_default_headers(headers))
             response.raise_for_status()
             charset = response.encoding or "utf-8"
-            return response.content.decode(charset, errors="replace")
+            html = response.content.decode(charset, errors="replace")
+
+            # Auto-detect SPA
+            if is_spa_empty(html):
+                logger.info(f"Auto-detected SPA shell for {url}. Falling back to Playwright rendering...")
+                js_html = get_html_with_js(url, timeout=timeout)
+                return js_html if js_html else html
+
+            return html
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error {e.response.status_code} for {url}")
         return None

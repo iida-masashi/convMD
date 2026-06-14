@@ -86,10 +86,10 @@ def _route_twitter(predicate: Predicate) -> tuple[Predicate, Handler]:
         parts = p.path.strip("/").split("/")
         if parts:
             screen_name = parts[0]
-            logger.info(f"Detected X.com account: @{screen_name}. Fetching recent tweets...")
+            logger.info(f"Detected X.com account: @{screen_name}. Fetching recent posts via Grok...")
             return cast(
                 "Path | None",
-                _dynamic_call("convmd.parsers.sns.twitter", "convert_twitter", screen_name, out),
+                _dynamic_call("convmd.parsers.sns.grok", "convert_grok", screen_name, out),
             )
         return None
 
@@ -139,7 +139,7 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
             pass_cfg_kwargs=("ocr",),
         ),
         _route(
-            _has_domain("ndl.go.jp"),
+            _has_domain("dl.ndl.go.jp"),
             "convmd.parsers.media.ndl",
             "convert_ndl",
             "Detected NDL Digital Collection URL. Processing...",
@@ -279,21 +279,19 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
             try:
                 res_path = handler(target_url, parsed, output_dir, cfg)
 
-                # Semantic Fallback: if result is too small, try AI.
+                # Semantic Fallback: if result is missing or too small, try AI.
                 # Skip for binary URLs — get_html would decode bytes as text.
-                if (
-                    res_path
-                    and res_path.exists()
-                    and res_path.stat().st_size < 200
-                    and not is_binary
+                if not is_binary and (
+                    not res_path
+                    or (res_path.exists() and res_path.stat().st_size < 200)
                 ):
-                    logger.info(f"Extraction result for {target_url} seems too small. Trying AI...")
+                    logger.info(f"Extraction result for {target_url} was empty or too small. Trying AI...")
                     from convmd.core.http import get_html
                     from convmd.core.llm_extractor import extract_with_llm
 
-                    html = get_html(target_url)
+                    html = get_html(target_url, render_js=getattr(cfg, "render_js", False))
                     if html:
-                        extract_with_llm(html, output_dir, url=target_url, schema=cfg.schema)
+                        extract_with_llm(html, output_dir, url=target_url, schema=getattr(cfg, "schema", None))
 
             except Exception:
                 logger.exception(f"Handler failed for {target_url}")
@@ -304,9 +302,9 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
                 from convmd.core.http import get_html
                 from convmd.core.llm_extractor import extract_with_llm
 
-                html = get_html(target_url)
+                html = get_html(target_url, render_js=getattr(cfg, "render_js", False))
                 if html:
                     logger.info(f"Retrying {target_url} with AI autonomous extraction...")
-                    extract_with_llm(html, output_dir, url=target_url, schema=cfg.schema)
+                    extract_with_llm(html, output_dir, url=target_url, schema=getattr(cfg, "schema", None))
             return
     logger.error(f"No route matched for {target_url}")
