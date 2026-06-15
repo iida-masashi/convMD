@@ -9,6 +9,7 @@ def test_fetch_html_encoding(mock_client_class):
     mock_response = MagicMock()
     mock_response.encoding = "utf-8"
     mock_response.charset_encoding = "utf-8"
+    mock_response.headers = {"content-type": "text/html; charset=utf-8"}
     mock_response.content = b"<html><body>Test" + b" padding" * 200 + b"</body></html>"
 
     mock_client_instance = MagicMock()

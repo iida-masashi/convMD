@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import urllib.parse
 from pathlib import Path
 from typing import Any, Mapping
@@ -67,6 +68,24 @@ def get_json(
         return None
 
 
+_CHARSET_RE = re.compile(r"""charset=["']?([\w-]+)""", re.IGNORECASE)
+
+
+def _resolve_charset(content_type: str, body: bytes) -> str:
+    """Resolve the response charset: HTTP header first, then <meta>, else utf-8.
+
+    httpx defaults ``response.encoding`` to utf-8 when the header omits a charset,
+    which mojibakes legacy pages that declare their charset only in a ``<meta>``
+    tag (e.g. ISO-2022-JP). Honor the declared charset with standard precedence.
+    """
+    m = _CHARSET_RE.search(content_type)
+    if m:
+        return m.group(1)
+    head = body[:2048].decode("latin-1", errors="replace")
+    m = _CHARSET_RE.search(head)
+    return m.group(1) if m else "utf-8"
+
+
 def encode_url_path(url: str) -> str:
     """Idempotently percent-encode the path component (used to be in download.fetch_html)."""
     parsed = urllib.parse.urlparse(url)
@@ -79,6 +98,7 @@ def get_html_with_js(url: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
     """GET a URL and return fully rendered HTML using Playwright."""
     try:
         from playwright.sync_api import sync_playwright
+
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(user_agent=USER_AGENT)
@@ -103,23 +123,33 @@ def is_spa_empty(html: str) -> bool:
         return True
 
     import re
+
     # Check for known SPA framework signatures
-    if re.search(r'id="__nuxt"', html) or re.search(r'id="__next"', html) or re.search(r'window\.__NUXT__', html):
+    if (
+        re.search(r'id="__nuxt"', html)
+        or re.search(r'id="__next"', html)
+        or re.search(r"window\.__NUXT__", html)
+    ):
         return True
 
     # Check for common SPA root tags with very little content inside
-    body_content = re.search(r'<body[^>]*>(.*?)</body>', html, re.IGNORECASE | re.DOTALL)
+    body_content = re.search(r"<body[^>]*>(.*?)</body>", html, re.IGNORECASE | re.DOTALL)
     if body_content:
         # Strip script tags inside body to see real content length
-        real_content = re.sub(r'<script[^>]*>.*?</script>', '', body_content.group(1), flags=re.IGNORECASE | re.DOTALL)
+        real_content = re.sub(
+            r"<script[^>]*>.*?</script>", "", body_content.group(1), flags=re.IGNORECASE | re.DOTALL
+        )
         # Strip noscript tags
-        real_content = re.sub(r'<noscript[^>]*>.*?</noscript>', '', real_content, flags=re.IGNORECASE | re.DOTALL)
+        real_content = re.sub(
+            r"<noscript[^>]*>.*?</noscript>", "", real_content, flags=re.IGNORECASE | re.DOTALL
+        )
         # Strip generic div/span tags to see if there's actual text
-        text_content = re.sub(r'<[^>]+>', '', real_content)
+        text_content = re.sub(r"<[^>]+>", "", real_content)
         if len(text_content.strip()) < 500:
             return True
 
     return False
+
 
 def get_html(
     url: str,
@@ -142,12 +172,17 @@ def get_html(
         with get_client(timeout=timeout) as client:
             response = client.get(encoded_url, headers=_default_headers(headers))
             response.raise_for_status()
-            charset = response.encoding or "utf-8"
-            html = response.content.decode(charset, errors="replace")
+            charset = _resolve_charset(response.headers.get("content-type", ""), response.content)
+            try:
+                html = response.content.decode(charset, errors="replace")
+            except LookupError:
+                html = response.content.decode("utf-8", errors="replace")
 
             # Auto-detect SPA
             if is_spa_empty(html):
-                logger.info(f"Auto-detected SPA shell for {url}. Falling back to Playwright rendering...")
+                logger.info(
+                    f"Auto-detected SPA shell for {url}. Falling back to Playwright rendering..."
+                )
                 js_html = get_html_with_js(url, timeout=timeout)
                 return js_html if js_html else html
 

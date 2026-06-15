@@ -1,7 +1,7 @@
 import os
 from unittest.mock import patch
 
-from convmd.core.http import _verify_default, encode_url_path
+from convmd.core.http import _resolve_charset, _verify_default, encode_url_path
 
 
 def test_encode_url_path_idempotent():
@@ -25,3 +25,20 @@ def test_verify_default_true_by_default():
 def test_verify_default_disabled_via_env():
     with patch.dict(os.environ, {"CONVMD_INSECURE_SSL": "1"}, clear=True):
         assert _verify_default() is False
+
+
+def test_resolve_charset_prefers_header():
+    assert _resolve_charset("text/html; charset=Shift_JIS", b"<meta charset=utf-8>") == "Shift_JIS"
+
+
+def test_resolve_charset_falls_back_to_meta():
+    body = b'<meta http-equiv="Content-Type" content="text/html; charset=ISO-2022-JP" />'
+    assert _resolve_charset("text/html", body) == "ISO-2022-JP"
+
+
+def test_resolve_charset_meta_short_form():
+    assert _resolve_charset("text/html", b'<meta charset="euc-jp">') == "euc-jp"
+
+
+def test_resolve_charset_defaults_to_utf8():
+    assert _resolve_charset("text/html", b"<html><body>hi</body></html>") == "utf-8"
