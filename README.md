@@ -13,7 +13,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **Zenn (`zenn.dev`)**: 記事のMarkdown抽出。
 - **Qiita (`qiita.com`)**: 記事本文の抽出、およびユーザーごとの最新記事一括取得。
 - **note (`note.com`)**: クリエイターの最新記事一覧の一括取得。
-- **X / Twitter (`x.com`)**: ユーザーのタイムライン取得（画像含む）とスレッドのMarkdown化。
+- **X / Twitter (`x.com` / `twitter.com`)**: xAI Grok API (`x_search`) 経由でユーザーの最近の投稿を取得（`XAI_API_KEY` が必要）。投稿本文はAIによって再構成されるため、出力はAI生成コンテンツとして要検証タグが付与されます。
 - **Wikipedia (`wikipedia.org`)**: ナビゲーション等を除去したクリーンな本文抽出（他言語対応）。
 - **国立公文書館デジタルアーカイブ (`digital.archives.go.jp`)**: ビューワーURLからのIIIFマニフェスト自動解析、高画質画像のダウンロード、およびAI OCRによる翻刻。
 - **GitHub (`github.com`)**: README / Issue / Pull Request 本文＋コメントを取得（`GITHUB_TOKEN` で認証可）。
@@ -43,6 +43,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - `--auto-link` で重要キーワードを Obsidian の内部リンク `[[ ]]` に自動変換、`--summary` で複数ファイル横断のエグゼクティブサマリーを生成。
 
 ### 🔁 差分追跡・コスト可視化・全文検索 (Phase 3)
+- HTTP取得は一時的なエラー（タイムアウト・接続エラー・429/5xx）を自動的にリトライ（指数バックオフ、最大3回再試行）。永続的なエラー（404等）は即座に失敗として扱われます。
 - 出力ディレクトリ配下に SQLite (`.convmd.db`) を持ち、URL ごとの本文ハッシュをキャッシュ。同一 URL を再取得した際に内容が変わっていなければスキップ。
 - `--diff-only` 指定時は、変化があった場合のみ `*_diff.md` を別途生成（unified diff 形式）。
 - 実行末尾に Gemini API のトークン使用量と概算コストを表示（`--no-cost` で抑止可）。
@@ -101,6 +102,13 @@ uv sync
   ローカル音声ファイルの文字起こし（`faster-whisper`、`uv sync --extra whisper` で導入）を利用する場合は、システムに **FFmpeg** がインストールされている必要があります。
   - **Windows (winget)**: `winget install ffmpeg`
   - **macOS (Homebrew)**: `brew install ffmpeg`
+
+- **X / Twitter 投稿取得機能**:
+  X.com / Twitter のユーザー投稿取得は xAI Grok API 経由のため、環境変数にAPIキーが必要です。
+  ```powershell
+  # Windows PowerShellの場合
+  $env:XAI_API_KEY="your_xai_api_key_here"
+  ```
 
 - **Notion連携機能**:
   変換したMarkdownを Notion データベースに直接ページとして書き出す場合は、環境変数に API トークンと対象データベースIDを設定してください。
@@ -179,6 +187,9 @@ uv run python -m convmd.cli https://example.com/news --diff-only
 
 # 既存の出力フォルダ全体を全文検索
 uv run python -m convmd.cli find "国書" --ignore-case --limit 20
+
+# セマンティック検索（ChromaDB + Gemini Embedding、キーワード一致ではなく意味の近さで検索）
+uv run python -m convmd.cli find "阿波説に関する記述" --semantic --domain example.com --title 国書
 ```
 
 ### 環境診断 (`convmd doctor`)
@@ -275,20 +286,23 @@ src/convmd/
 ├── constants.py      # サフィックス・モデル名・タイムアウトの単一の真実
 ├── config.py         # 出力先解決（副作用なし）
 ├── exporters/        # md / json / pandoc(epub,pdf,docx,html)
-├── commands/         # find サブコマンド等
+├── commands/         # find / doctor サブコマンド
 ├── core/
-│   ├── http.py       # 集中化された httpx ヘルパー（TLS 設定込み）
-│   ├── gemini.py     # Gemini API 集中化 + UsageTracker（コスト集計）
-│   ├── cache.py      # SQLite ベースのキャッシュ & unified diff
-│   ├── crawler.py    # 同一ドメインBFSクローラ
-│   ├── iiif.py       # IIIF マニフェスト処理 + 任意の bilingual OCR
-│   ├── ocr.py        # OCR の薄いラッパ
-│   ├── transform.py  # transform / auto-link / summary
-│   ├── download.py   # 画像/HTML 取得の互換シム
-│   └── utils.py      # フロントマター / ファイル名サニタイズ
+│   ├── http.py         # 集中化された httpx ヘルパー（TLS設定・リトライ/バックオフ込み）
+│   ├── gemini.py        # Gemini API 集中化 + UsageTracker（コスト集計）
+│   ├── cache.py         # SQLite ベースのキャッシュ & unified diff
+│   ├── batch.py         # --input-file / --retry-failed の失敗リスト管理
+│   ├── crawler.py       # 同一ドメインBFSクローラ
+│   ├── iiif.py          # IIIF マニフェスト処理 + 任意の bilingual OCR
+│   ├── ocr.py           # OCR の薄いラッパ
+│   ├── llm_extractor.py # Gemini によるDOM自律解析（Tier 2 抽出）
+│   ├── vector_db.py     # ChromaDB + Gemini Embedding（`convmd find --semantic`）
+│   ├── transform.py     # transform / auto-link / summary
+│   ├── download.py      # 画像/HTML 取得の互換シム
+│   └── utils.py         # フロントマター / ファイル名サニタイズ
 ├── parsers/          # 各プラットフォーム別のパーサ群
 │   ├── general.py / office.py
 │   ├── media/        # zenn, qiita, wikipedia, kokusho, audio, hatena, substack, medium, speakerdeck, podcast
-│   └── sns/          # note, twitter, youtube, github, reddit, hackernews
-└── integrations/     # notebooklm / obsidian / slack
+│   └── sns/          # note, grok(X/Twitter), youtube, github, reddit, hackernews
+└── integrations/     # notebooklm / obsidian(_rest) / notion / slack / vault_tags
 ```
