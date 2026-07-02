@@ -47,6 +47,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - `--diff-only` 指定時は、変化があった場合のみ `*_diff.md` を別途生成（unified diff 形式）。
 - 実行末尾に Gemini API のトークン使用量と概算コストを表示（`--no-cost` で抑止可）。
 - `convmd find "<キーワード>"` で既存の出力フォルダ配下を全文検索（ripgrep があれば自動使用）。
+- `convmd doctor` で環境診断（pandoc/ffmpeg の有無、Gemini APIキー、オプション依存関係、設定ファイルなど）を実行。
 
 ### 📤 出力フォーマット (`--format`)
 - `md`（既定）、`json`（フロントマター + 本文を構造化した配列）、`epub` / `pdf` / `docx` / `html`（要 `pandoc`、PDF は xelatex が必要）。
@@ -99,6 +100,15 @@ uv sync
   ローカル音声ファイルの文字起こし（`faster-whisper`、`uv sync --extra whisper` で導入）を利用する場合は、システムに **FFmpeg** がインストールされている必要があります。
   - **Windows (winget)**: `winget install ffmpeg`
   - **macOS (Homebrew)**: `brew install ffmpeg`
+
+- **Notion連携機能**:
+  変換したMarkdownを Notion データベースに直接ページとして書き出す場合は、環境変数に API トークンと対象データベースIDを設定してください。
+  ```powershell
+  # Windows PowerShellの場合
+  $env:NOTION_API_TOKEN="your_notion_integration_token"
+  $env:NOTION_DATABASE_ID="your_notion_database_id"
+  ```
+  データベースに `Source`（URL型）や `Tags`（マルチセレクト型）のプロパティがあれば自動的に設定されます（無ければスキップされ、失敗にはなりません）。
 
 ---
 
@@ -169,6 +179,15 @@ uv run python -m convmd.cli https://example.com/news --diff-only
 # 既存の出力フォルダ全体を全文検索
 uv run python -m convmd.cli find "国書" --ignore-case --limit 20
 ```
+
+### 環境診断 (`convmd doctor`)
+`pandoc` / `ffmpeg` の PATH 有無、Gemini APIキーの設定状況、`faster-whisper` / `playwright` / `notebooklm-py` / `pillow` / `yt-dlp` などオプション依存関係のインストール状況、`playwright` を入れている場合はブラウザバイナリ（`playwright install`）の有無、`.convmd.yaml` の存在とキー内容（`obsidian_vault` が設定されている場合は `--output-dir` との優先順位の注意も表示）、`CONVMD_OUTPUT_DIR` 環境変数の設定状況をまとめて確認できます。
+
+```bash
+uv run python -m convmd.cli doctor
+```
+
+各行は `[OK]` / `[WARN]` / `[FAIL]` / `[MISSING]` のいずれかで始まります（`[MISSING]` は必須ではない任意機能が未設定なだけで、必ずしも問題ではありません）。診断ツールのため、問題があっても終了コードは 0 のままです。
 
 ### 出力フォーマットの切替 (`--format`)
 ```bash

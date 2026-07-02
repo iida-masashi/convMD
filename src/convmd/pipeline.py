@@ -187,6 +187,16 @@ def dispatch_phase(files: list[Path], summary_path: Path | None, cfg: RunConfig)
             logger.info(f"Exporting to Obsidian via API: {md_file.name}")
             export_to_obsidian_api(md_file, obsidian_api_url, obsidian_api_key, target_folder="Clippings")
 
+    notion_api_token = os.environ.get("NOTION_API_TOKEN")
+    notion_database_id = os.environ.get("NOTION_DATABASE_ID")
+
+    if notion_api_token and notion_database_id:
+        from convmd.integrations.notion import export_to_notion
+
+        for md_file in files:
+            logger.info(f"Exporting to Notion: {md_file.name}")
+            export_to_notion(md_file, notion_api_token, notion_database_id)
+
     if cfg.slack_webhook and summary_path and summary_path.exists():
         from convmd.integrations.slack import send_to_slack
 

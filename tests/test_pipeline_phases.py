@@ -211,10 +211,23 @@ def test_dispatch_obsidian_rest_branch(mock_export, tmp_path, monkeypatch):
     assert mock_export.call_count == 2
 
 
+@patch("convmd.integrations.notion.export_to_notion")
+def test_dispatch_notion_branch(mock_export, tmp_path, monkeypatch):
+    monkeypatch.setenv("NOTION_API_TOKEN", "secret-token")
+    monkeypatch.setenv("NOTION_DATABASE_ID", "db-123")
+    cfg = _cfg("x", tmp_path)
+    files = [tmp_path / "a.md", tmp_path / "b.md"]
+    pipeline.dispatch_phase(files, None, cfg)
+    assert mock_export.call_count == 2
+    mock_export.assert_any_call(files[0], "secret-token", "db-123")
+
+
 @patch("convmd.integrations.slack.send_to_slack")
 def test_dispatch_slack_branch(mock_slack, tmp_path, monkeypatch):
     monkeypatch.delenv("OBSIDIAN_REST_API_URL", raising=False)
     monkeypatch.delenv("OBSIDIAN_REST_API_KEY", raising=False)
+    monkeypatch.delenv("NOTION_API_TOKEN", raising=False)
+    monkeypatch.delenv("NOTION_DATABASE_ID", raising=False)
     cfg = _cfg("x", tmp_path, slack_webhook="https://hooks.slack/")
     summary = tmp_path / "summary.md"
     summary.write_text("hello", encoding="utf-8")
