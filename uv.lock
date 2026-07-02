@@ -832,18 +832,38 @@ source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "chromadb" },
-    { name = "faster-whisper" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "markdownify" },
     { name = "markitdown", extra = ["all"] },
+    { name = "pyyaml" },
+    { name = "readability-lxml" },
+    { name = "requests" },
+    { name = "youtube-transcript-api" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "faster-whisper" },
     { name = "notebooklm-py" },
     { name = "pillow" },
     { name = "playwright" },
-    { name = "pyyaml" },
-    { name = "readability-lxml" },
-    { name = "youtube-transcript-api" },
     { name = "yt-dlp" },
+]
+image = [
+    { name = "pillow" },
+]
+notebooklm = [
+    { name = "notebooklm-py" },
+]
+render = [
+    { name = "playwright" },
+]
+scripts = [
+    { name = "yt-dlp" },
+]
+whisper = [
+    { name = "faster-whisper" },
 ]
 
 [package.dev-dependencies]
@@ -861,19 +881,22 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
     { name = "chromadb", specifier = ">=1.5.9" },
-    { name = "faster-whisper", specifier = ">=1.0.1" },
+    { name = "convmd", extras = ["whisper", "render", "notebooklm", "image", "scripts"], marker = "extra == 'all'" },
+    { name = "faster-whisper", marker = "extra == 'whisper'", specifier = ">=1.0.1" },
     { name = "google-genai", specifier = ">=2.0.1" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "markdownify", specifier = ">=0.12.1" },
     { name = "markitdown", extras = ["all"], specifier = ">=0.0.1" },
-    { name = "notebooklm-py", specifier = ">=0.4.0" },
-    { name = "pillow", specifier = ">=12.2.0" },
-    { name = "playwright" },
+    { name = "notebooklm-py", marker = "extra == 'notebooklm'", specifier = ">=0.4.0" },
+    { name = "pillow", marker = "extra == 'image'", specifier = ">=12.2.0" },
+    { name = "playwright", marker = "extra == 'render'", specifier = ">=1.40.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "readability-lxml", specifier = ">=0.8.1" },
+    { name = "requests", specifier = ">=2.31.0" },
     { name = "youtube-transcript-api", specifier = ">=0.6.2" },
-    { name = "yt-dlp", specifier = ">=2026.3.17" },
+    { name = "yt-dlp", marker = "extra == 'scripts'", specifier = ">=2026.3.17" },
 ]
+provides-extras = ["whisper", "render", "notebooklm", "image", "scripts", "all"]
 
 [package.metadata.requires-dev]
 dev = [

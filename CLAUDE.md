@@ -1,0 +1,69 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+> General guidelines for this codebase: think before coding (state assumptions, surface tradeoffs instead of picking silently), keep changes minimal and surgical (touch only what the task requires, don't refactor unrelated code), and match existing style.
+
+## What this is
+
+convMD converts web sources (articles, SNS posts, video/audio, digital archives) and local Office/PDF files into Markdown for knowledge bases like Obsidian. A single CLI entry point dispatches each target URL/path to the right parser, then runs it through a post-processing pipeline. The user-facing feature list and examples are in `README.md` (Japanese) — read it for *what* the tool does; this file covers *how the code is wired*.
+
+## Commands
+
+Package manager is **uv**. The venv is `.venv/`.
+
+```bash
+uv sync --all-extras                 # install deps for development (incl. dev group + all optional extras)
+uv run python -m convmd.cli <target> # run the CLI (URL, file, or dir)
+uv run convmd <target>               # same via the installed entry point
+
+uv run pytest                        # full test suite (requires --all-extras: some tests patch optional deps like faster-whisper)
+uv run pytest tests/test_routing.py  # one file
+uv run pytest tests/test_routing.py::test_name   # one test
+uv run pytest -k "kokusho"           # by keyword
+
+uv run ruff check .                  # lint
+uv run ruff format .                 # format (line-length 100)
+uv run mypy src                      # type check — must pass strict (disallow_untyped_defs)
+```
+
+mypy runs in strict mode and `tests/` is excluded from it. Every function in `src/` needs full type hints or mypy fails.
+
+## Architecture
+
+The flow is **CLI → routing → parser → pipeline phases**. Three modules carry the structure:
+
+- **`cli.py`** — thin entry point. Detects the `find` subcommand by sniffing `sys.argv[1]` before argparse (there are no real subparsers — the `convmd <target>` shape is preserved verbatim). Does a two-pass parse so YAML config can set argparse defaults before the real parse.
+- **`cli_args.py`** — `build_parser()` + the typed `RunConfig` dataclass. `RunConfig` is the single config object threaded through everything. `to_run_config` uses a tolerant `_typed()` getter so partially-stubbed test args don't break it.
+- **`pipeline.py`** — `run_pipeline` → `run_once` runs phases in order: **extract → diff → transform → link → summary → dispatch**. Each phase takes the list of Markdown files from the previous one. `extract_phase` also rescans `output_dir` for files newer than `start_time` to catch multi-file outputs (crawling, image sets) that handlers don't return directly.
+- **`routing.py`** — `dispatch_url` matches the URL against an ordered `(predicate, handler)` list; **first match wins**, with a catch-all fallback to general extraction. Add a new site by adding a route in `_build_routes()`.
+
+### Routing conventions (important)
+
+- Routes resolve their handler **dynamically at dispatch time** via `_dynamic_call(module, func, ...)` (importlib + getattr), *not* by binding the function at registration. This is deliberate: it keeps `patch("convmd.parsers.sns.youtube.convert_youtube")` and similar test patches effective. Follow this pattern when adding routes — don't import parser functions at module top level into the route table.
+- A handler's standard signature is `(url, output_dir, **cfg_kwargs) -> Path | None`. Pass selected `RunConfig` fields through with `pass_cfg_kwargs=(...)` (see the kokusho/naj/ndl routes passing `ocr`/`bilingual`).
+- `dispatch_url` has **two AI fallbacks**: if a handler raises, or if its output file is `< 200` bytes, it retries with `extract_with_llm` (Gemini autonomous DOM extraction). `--ai-extract` forces this path up front.
+
+### Parser contract
+
+Each parser module exposes a `convert_<site>(url, output_dir, ...) -> Path | None` function that writes one or more `.md` files into `output_dir` and returns the primary path (or `None` for multi-file outputs). Parsers live in `parsers/media/` (publishing platforms, archives, audio) and `parsers/sns/` (social). Standard helpers:
+
+- `core/http.py` — **all** HTTP goes through here (`get_html`, `get_json`, `download_binary`). It centralizes the httpx client, `USER_AGENT`, timeouts, and TLS config. TLS verification is on by default; `CONVMD_INSECURE_SSL=1` disables it. Don't create httpx clients elsewhere.
+- `core/utils.py` — `generate_frontmatter(title, url, tags=...)` and `sanitize_filename(...)`. Use these for consistent YAML frontmatter and safe filenames.
+- `core/download.py` — `process_images(body, base_url, output_dir)` for inlined image handling.
+
+### Gemini / cost
+
+All Gemini calls go through `core/gemini.py`, which resolves the key (`GEMINI_API_KEY` or `GOOGLE_API_KEY`), builds the client, strips code fences, and records token usage in a `UsageTracker`. Model names are constants in `constants.py` (`Models.GEMINI_PRO` = `gemini-3.1-pro-preview`, `Models.GEMINI_FLASH` = `gemini-3-flash-preview`). The cost table in `pipeline._PRICE_USD_PER_1M_TOKENS` is keyed by those model strings — update both together if a model changes.
+
+### Cache & diff
+
+`core/cache.py` backs a SQLite db (`.convmd.db`) at the output root, storing a content hash per source. `diff_phase` skips downstream work when the hash is unchanged; with `--diff-only` it writes a `*_diff.md` (unified diff). Pipeline artifacts are recognized by suffix via `constants.Suffix` (`_transformed.md`, `_linked.md`, `_diff.md`, `executive_summary.md`) and excluded from the "new files" rescan.
+
+## Conventions
+
+- **Single source of truth** for suffixes, model names, and HTTP defaults is `constants.py`. Don't hardcode these strings in parsers.
+- New CLI flags: add to `build_parser()`, add the field to `RunConfig`, and wire it in `to_run_config` with `_typed(...)`. YAML config keys mirror flag names in snake_case (`--obsidian-vault` → `obsidian_vault`); config precedence is CLI > `--config <path>` > `./.convmd.yaml` > `~/.convmd.yaml`.
+- `cli.py` re-exports `process_target`, `transform_markdown_with_gemini`, `upload_to_notebooklm` and keeps `argparse`/`time` importable at module level **for legacy test patch surfaces** — the `# noqa` comments mark these; don't remove them.
+- Use `pathlib.Path` everywhere (cross-platform; primary dev is Windows/PowerShell). Default output is `./output/`, overridable via `--output-dir` or `CONVMD_OUTPUT_DIR`; `--obsidian-vault` overrides both.
+- `scripts/` holds one-off standalone crawl/transcript scripts, not part of the package.

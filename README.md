@@ -49,7 +49,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - `convmd find "<キーワード>"` で既存の出力フォルダ配下を全文検索（ripgrep があれば自動使用）。
 
 ### 📤 出力フォーマット (`--format`)
-- `md`（既定）、`json`（フロントマター + 本文を構造化した配列）、`epub` / `pdf`（要 `pandoc`、PDF は xelatex が必要）。
+- `md`（既定）、`json`（フロントマター + 本文を構造化した配列）、`epub` / `pdf` / `docx` / `html`（要 `pandoc`、PDF は xelatex が必要）。
 
 ---
 
@@ -62,9 +62,27 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 git clone https://github.com/iida-masashi/convMD.git
 cd convMD
 
-# uv を用いた依存関係の同期（仮想環境の自動作成）
+# uv を用いた依存関係の同期（仮想環境の自動作成、コア機能のみ）
 uv sync
 ```
+
+### オプション機能のインストール
+
+デフォルトの `uv sync` はコア機能（Web/SNS変換・画像埋め込み・全文検索など）のみを導入します。以下の機能は追加インストールが必要です。
+
+| 機能 | インストールコマンド | 備考 |
+|---|---|---|
+| ローカル音声ファイルの文字起こし | `uv sync --extra whisper` | 別途 FFmpeg が必要（下記） |
+| JavaScript動的レンダリング（`--render-js`） | `uv sync --extra render` | `uv run playwright install` でブラウザバイナリの追加インストールが必要 |
+| NotebookLM連携 | `uv sync --extra notebooklm` | 別途ブラウザCookie認証が必要（`notebooklm login --browser-cookies chrome`） |
+| Gemini画像OCR | `uv sync --extra image` | |
+| `scripts/` 内の補助スクリプト（YouTube字幕取得等） | `uv sync --extra scripts` | パッケージ本体（CLI）は利用不可、`scripts/*.py` 単体で実行 |
+| 全部まとめて | `uv sync --extra all` | |
+
+- **docx/epub/pdf/html 変換（`--format`）**:
+  外部ツール **[pandoc](https://pandoc.org/installing.html)** が必要です。
+  - **Windows (winget)**: `winget install --id JohnMacFarlane.Pandoc`
+  - **macOS (Homebrew)**: `brew install pandoc`
 
 ### 必要な環境変数・外部ツール
 一部の高度な機能を利用するためには、以下のセットアップが必要です。
@@ -78,7 +96,7 @@ uv sync
   ```
 
 - **音声文字起こし機能**:
-  ローカル音声ファイルの文字起こし（`faster-whisper`）を利用する場合は、システムに **FFmpeg** がインストールされている必要があります。
+  ローカル音声ファイルの文字起こし（`faster-whisper`、`uv sync --extra whisper` で導入）を利用する場合は、システムに **FFmpeg** がインストールされている必要があります。
   - **Windows (winget)**: `winget install ffmpeg`
   - **macOS (Homebrew)**: `brew install ffmpeg`
 
@@ -156,6 +174,8 @@ uv run python -m convmd.cli find "国書" --ignore-case --limit 20
 ```bash
 uv run python -m convmd.cli https://zenn.dev/.../slug --format json   # 構造化JSON
 uv run python -m convmd.cli ./output/*.md --format epub               # pandoc 必須
+uv run python -m convmd.cli ./output/*.md --format docx               # pandoc 必須
+uv run python -m convmd.cli ./output/*.md --format html               # pandoc 必須
 ```
 
 ### YAML 設定ファイル (`--config`)
@@ -213,7 +233,7 @@ src/convmd/
 ├── routing.py        # URL ドメイン別の動的ディスパッチ（プラグイン追加に強い）
 ├── constants.py      # サフィックス・モデル名・タイムアウトの単一の真実
 ├── config.py         # 出力先解決（副作用なし）
-├── exporters/        # md / json / pandoc(epub,pdf)
+├── exporters/        # md / json / pandoc(epub,pdf,docx,html)
 ├── commands/         # find サブコマンド等
 ├── core/
 │   ├── http.py       # 集中化された httpx ヘルパー（TLS 設定込み）
