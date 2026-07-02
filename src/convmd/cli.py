@@ -90,8 +90,23 @@ def _maybe_run_find_subcommand() -> bool:
     return False
 
 
+def _maybe_run_doctor_subcommand() -> bool:
+    """If the user invoked ``convmd doctor``, handle it and return True."""
+    if len(sys.argv) > 1 and sys.argv[1] == "doctor":
+        from convmd.cli_args import build_doctor_parser
+        from convmd.commands.doctor_cmd import run_doctor
+
+        doctor_parser = build_doctor_parser()
+        doctor_args = doctor_parser.parse_args(sys.argv[2:])
+        run_doctor(doctor_args)
+        return True
+    return False
+
+
 def main() -> None:
     if _maybe_run_find_subcommand():
+        return
+    if _maybe_run_doctor_subcommand():
         return
 
     parser = build_parser()

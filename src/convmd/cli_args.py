@@ -114,6 +114,13 @@ def build_find_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_doctor_parser() -> argparse.ArgumentParser:
+    """Parser for the ``doctor`` subcommand. Used only when first arg is literally 'doctor'."""
+    return argparse.ArgumentParser(
+        prog="convmd doctor", description="Run environment health checks"
+    )
+
+
 def _typed(
     args: argparse.Namespace,
     name: str,
