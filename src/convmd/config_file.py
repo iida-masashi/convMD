@@ -55,6 +55,7 @@ _ALLOWED_KEYS = {
     "podcast_limit",
     "normalize_tags",
     "tag_similarity_cutoff",
+    "render_js",
 }
 
 

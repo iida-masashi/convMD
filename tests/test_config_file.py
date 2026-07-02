@@ -164,6 +164,28 @@ def test_load_config_cli_integration_via_set_defaults(tmp_path, monkeypatch):
     assert cfg.depth == 2
 
 
+def test_load_config_render_js_survives_to_run_config(tmp_path):
+    """Regression: render_js was missing from _ALLOWED_KEYS, so a YAML
+    ``render_js: true`` was silently dropped with a warning and never reached
+    RunConfig, even though --render-js works fine from the CLI."""
+    from convmd.cli_args import build_parser, to_run_config
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".convmd.yaml").write_text("render_js: true\n", encoding="utf-8")
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    defaults = load_config(None, home=home, cwd=cwd)
+    assert defaults == {"render_js": True}
+
+    parser = build_parser()
+    parser.set_defaults(**defaults)
+    args = parser.parse_args(["https://example.com"])
+
+    cfg = to_run_config(args, tmp_path)
+    assert cfg.render_js is True
+
+
 def test_load_config_cli_flag_wins_over_yaml(tmp_path):
     from convmd.cli_args import build_parser, to_run_config
 
