@@ -54,7 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--summary", action="store_true")
     parser.add_argument("--slack-webhook", type=str, default=None)
     parser.add_argument("--interval", type=int, default=0)
-    parser.add_argument("--format", choices=["md", "json", "epub", "pdf"], default="md")
+    parser.add_argument("--format", choices=["md", "json", "epub", "pdf", "docx", "html"], default="md")
     parser.add_argument("--bilingual", action="store_true")
     parser.add_argument("--ocr", action="store_true", help="Enable AI OCR for images (e.g. IIIF manifests)")
     parser.add_argument("--ai-extract", action="store_true", help="Force autonomous extraction via LLM")

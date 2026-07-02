@@ -23,7 +23,7 @@ def get_exporter(name: str) -> Exporter | None:
         from convmd.exporters.json_exporter import JsonExporter
 
         return JsonExporter()
-    if name in {"epub", "pdf"}:
+    if name in {"epub", "pdf", "docx", "html"}:
         from convmd.exporters.pandoc_exporter import PandocExporter
 
         return PandocExporter(target=name)

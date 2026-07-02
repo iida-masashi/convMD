@@ -232,11 +232,37 @@ def test_pandoc_exporter_pdf_adds_xelatex(_mock_which, mock_run, tmp_path):
     assert "--pdf-engine=xelatex" in cmd
 
 
+@patch("convmd.exporters.pandoc_exporter.subprocess.run")
+@patch("convmd.exporters.pandoc_exporter.shutil.which", return_value="/usr/bin/pandoc")
+def test_pandoc_exporter_docx_success(_mock_which, mock_run, tmp_path):
+    md = tmp_path / "a.md"
+    md.write_text("# Hello", encoding="utf-8")
+    out = PandocExporter("docx").export([md], tmp_path)
+    assert out is not None
+    assert out.name == "export.docx"
+    args, _ = mock_run.call_args
+    assert "--pdf-engine=xelatex" not in args[0]
+
+
+@patch("convmd.exporters.pandoc_exporter.subprocess.run")
+@patch("convmd.exporters.pandoc_exporter.shutil.which", return_value="/usr/bin/pandoc")
+def test_pandoc_exporter_html_success(_mock_which, mock_run, tmp_path):
+    md = tmp_path / "a.md"
+    md.write_text("# Hello", encoding="utf-8")
+    out = PandocExporter("html").export([md], tmp_path)
+    assert out is not None
+    assert out.name == "export.html"
+    args, _ = mock_run.call_args
+    assert "--pdf-engine=xelatex" not in args[0]
+
+
 def test_get_exporter_dispatch():
     assert get_exporter("md") is None
     assert get_exporter("json") is not None
     assert get_exporter("epub") is not None
     assert get_exporter("pdf") is not None
+    assert get_exporter("docx") is not None
+    assert get_exporter("html") is not None
     assert get_exporter("unknown") is None
 
 
