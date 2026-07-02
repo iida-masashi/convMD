@@ -38,12 +38,20 @@ class RunConfig:
     normalize_tags: bool = False
     tag_similarity_cutoff: float = 0.85
     render_js: bool = False
+    input_file: Path | None = None
+    retry_failed: bool = False
     extra: dict = field(default_factory=dict)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="convmd", description="Web to Markdown Toolkit")
-    parser.add_argument("target", help="URL, local file path, or directory path to convert")
+    parser.add_argument(
+        "target",
+        nargs="?",
+        default=None,
+        help="URL, local file path, or directory path to convert. "
+        "Not required when using --input-file or --retry-failed.",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -97,6 +105,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use Playwright to render JavaScript before extracting HTML.",
     )
+    parser.add_argument(
+        "--input-file",
+        type=Path,
+        default=None,
+        help="Process multiple targets (one URL or file path per line, '#' comments "
+        "and blank lines ignored) instead of a single positional target. If a "
+        "positional target is also given, --input-file takes precedence.",
+    )
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Reprocess only the targets that failed on a previous --input-file "
+        "(or --retry-failed) run. Reads <output-dir>/.convmd_failed.txt, so this "
+        "must be run with the same --output-dir as the original run.",
+    )
     return parser
 
 
@@ -138,8 +161,9 @@ def _typed(
 
 
 def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
+    target = getattr(args, "target", None)
     return RunConfig(
-        target=str(args.target),
+        target=str(target) if target is not None else "",
         output_dir=output_dir,
         transform=_typed(args, "transform", None, str),
         obsidian_vault=_typed(args, "obsidian_vault", None, Path),
@@ -162,4 +186,6 @@ def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
         normalize_tags=_typed(args, "normalize_tags", False, bool),
         tag_similarity_cutoff=_typed(args, "tag_similarity_cutoff", 0.85, float),
         render_js=_typed(args, "render_js", False, bool),
+        input_file=_typed(args, "input_file", None, Path),
+        retry_failed=_typed(args, "retry_failed", False, bool),
     )

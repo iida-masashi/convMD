@@ -120,6 +120,9 @@ def main() -> None:
         parser.set_defaults(**yaml_defaults)
     args = parser.parse_args()
 
+    if not args.target and not args.input_file and not args.retry_failed:
+        parser.error("one of target, --input-file, or --retry-failed is required")
+
     output_dir = _resolve_output_dir(args, yaml_defaults or {})
     logger.info(f"Output directory set to: {output_dir}")
 

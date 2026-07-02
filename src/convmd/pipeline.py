@@ -72,10 +72,75 @@ def _is_pipeline_artifact(name: str) -> bool:
     )
 
 
+def _md_snapshot(output_dir: Path) -> dict[Path, float]:
+    return {
+        md_file: md_file.stat().st_mtime
+        for md_file in output_dir.rglob("*.md")
+        if md_file.is_file() and not _is_pipeline_artifact(md_file.name)
+    }
+
+
+def _process_batch(targets: list[str], cfg: RunConfig) -> tuple[list[Path], list[str]]:
+    """Process each target, tracking which ones produced no new output file.
+
+    ``process_target``/``dispatch_url`` swallow their own exceptions and fall back to
+    AI extraction internally, so a raised exception is not a reliable failure signal
+    here. Instead, a target is considered failed if it produced no new/updated Markdown
+    file. Detection is a before/after directory snapshot diff per target (not a
+    wall-clock ``mtime >= time.time()`` comparison): the latter lets a fast-failing
+    target silently claim a slower-preceding target's freshly-written file when their
+    timestamps land in the same clock tick, turning a real failure into a false
+    success. Snapshotting rules that out and also has no clock-resolution dependency.
+    Biased toward "failed" on ambiguity either way, since a false failure just costs a
+    redundant reprocess next run while a false success permanently drops a genuinely
+    broken target from the retry list.
+    """
+    results: list[Path] = []
+    failed: list[str] = []
+    for target in targets:
+        before = _md_snapshot(cfg.output_dir)
+        target_path = Path(target)
+        p = process_target(target, target_path, cfg.output_dir, cfg)
+        if p:
+            results.append(p)
+
+        after = _md_snapshot(cfg.output_dir)
+        new_files = [
+            path for path, mtime in after.items() if path not in before or mtime != before[path]
+        ]
+        results.extend(f for f in new_files if f not in results)
+
+        if not p and not new_files:
+            logger.warning(f"No output produced for '{target}'; marking as failed.")
+            failed.append(target)
+    return results, failed
+
+
 def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
     """Run parsers and return newly generated Markdown files."""
+    if cfg.retry_failed or cfg.input_file:
+        from convmd.core.batch import read_failed_targets, read_targets_file, write_failed_targets
+
+        if cfg.retry_failed and cfg.input_file:
+            logger.warning("Both --input-file and --retry-failed given; using --retry-failed.")
+
+        if cfg.retry_failed:
+            targets = read_failed_targets(cfg.output_dir)
+        else:
+            assert cfg.input_file is not None  # guaranteed by the `cfg.input_file` branch condition
+            targets = read_targets_file(cfg.input_file)
+        logger.info(f"Batch mode: processing {len(targets)} targets.")
+        results, failed = _process_batch(targets, cfg)
+        write_failed_targets(cfg.output_dir, failed)
+        if failed:
+            logger.warning(
+                f"{len(failed)}/{len(targets)} targets failed; see "
+                f"{cfg.output_dir / '.convmd_failed.txt'} (rerun with --retry-failed)."
+            )
+        return sorted({p for p in results if p.suffix.lower() == ".md"})
+
     target_path = Path(cfg.target)
-    results: list[Path] = []
+    results = []
 
     if target_path.exists() and target_path.is_dir():
         logger.info(f"Detected directory input. Processing files recursively in: {target_path}")

@@ -48,6 +48,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - 実行末尾に Gemini API のトークン使用量と概算コストを表示（`--no-cost` で抑止可）。
 - `convmd find "<キーワード>"` で既存の出力フォルダ配下を全文検索（ripgrep があれば自動使用）。
 - `convmd doctor` で環境診断（pandoc/ffmpeg の有無、Gemini APIキー、オプション依存関係、設定ファイルなど）を実行。
+- `--input-file <path>` で複数URL/ファイルパスを一括処理し、失敗したものだけ `--retry-failed` で再試行。
 
 ### 📤 出力フォーマット (`--format`)
 - `md`（既定）、`json`（フロントマター + 本文を構造化した配列）、`epub` / `pdf` / `docx` / `html`（要 `pandoc`、PDF は xelatex が必要）。
@@ -188,6 +189,22 @@ uv run python -m convmd.cli doctor
 ```
 
 各行は `[OK]` / `[WARN]` / `[FAIL]` / `[MISSING]` のいずれかで始まります（`[MISSING]` は必須ではない任意機能が未設定なだけで、必ずしも問題ではありません）。診断ツールのため、問題があっても終了コードは 0 のままです。
+
+### バッチ処理と失敗リトライ (`--input-file` / `--retry-failed`)
+複数の URL・ファイルパスを 1 行 1 件のテキストファイルにまとめて一括処理できます（`#` で始まる行・空行は無視）。
+
+```bash
+# urls.txt: 1行1URL、#はコメント
+uv run python -m convmd.cli --input-file urls.txt --output-dir ./output
+```
+
+処理後、何も出力を生成できなかったターゲットは `<output-dir>/.convmd_failed.txt` に記録されます。次回は `--retry-failed` を指定すると、その失敗リストだけを再処理します（**同じ `--output-dir` を指定する必要があります**）。全て成功すればファイルは自動的に削除されます。
+
+```bash
+uv run python -m convmd.cli --retry-failed --output-dir ./output
+```
+
+`--input-file` と `--retry-failed` を同時に指定した場合は `--retry-failed` が優先されます。なお `core/http.py` のリトライ（一時的なネットワークエラーに対する自動再試行）とは独立した仕組みで、こちらは「1回の実行内で自動リトライしても最終的に失敗したターゲット」を、実行をまたいで再試行するためのものです。
 
 ### 出力フォーマットの切替 (`--format`)
 ```bash

@@ -124,6 +124,77 @@ def test_extract_phase_skips_pipeline_artifacts(tmp_path):
     assert "x_diff.md" not in names
 
 
+# --- batch mode (--input-file / --retry-failed) ---
+
+def test_extract_phase_input_file_marks_failed_targets(tmp_path):
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    input_file = tmp_path / "urls.txt"
+    input_file.write_text(
+        "# a comment\nhttps://good.example/\n\nhttps://dead.example/\n", encoding="utf-8"
+    )
+
+    def side(target_url, *_a, **_k):
+        if "good" in target_url:
+            (outdir / "good.md").write_text("body", encoding="utf-8")
+        # dead.example produces nothing, simulating a silently-swallowed failure
+
+    cfg = _cfg("unused", outdir, input_file=input_file)
+    with patch("convmd.routing.dispatch_url", side_effect=side):
+        files = pipeline.extract_phase(cfg, start_time=0)
+
+    assert any(p.name == "good.md" for p in files)
+    failed_file = outdir / ".convmd_failed.txt"
+    assert failed_file.exists()
+    assert failed_file.read_text(encoding="utf-8").strip() == "https://dead.example/"
+
+
+def test_extract_phase_retry_failed_reprocesses_only_failed_targets(tmp_path):
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    (outdir / ".convmd_failed.txt").write_text("https://dead.example/\n", encoding="utf-8")
+
+    cfg = _cfg("unused", outdir, retry_failed=True)
+    with patch("convmd.routing.dispatch_url") as mock_dispatch:
+        # still fails: produces no file
+        pipeline.extract_phase(cfg, start_time=0)
+
+    mock_dispatch.assert_called_once()
+    assert mock_dispatch.call_args[0][0] == "https://dead.example/"
+    # still failing -> file persists
+    assert (outdir / ".convmd_failed.txt").read_text(encoding="utf-8").strip() == "https://dead.example/"
+
+
+def test_extract_phase_retry_failed_clears_list_on_success(tmp_path):
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    (outdir / ".convmd_failed.txt").write_text("https://now-fixed.example/\n", encoding="utf-8")
+
+    def side(*_a, **_k):
+        (outdir / "recovered.md").write_text("body", encoding="utf-8")
+
+    cfg = _cfg("unused", outdir, retry_failed=True)
+    with patch("convmd.routing.dispatch_url", side_effect=side):
+        files = pipeline.extract_phase(cfg, start_time=0)
+
+    assert any(p.name == "recovered.md" for p in files)
+    assert not (outdir / ".convmd_failed.txt").exists()
+
+
+def test_extract_phase_input_file_and_retry_failed_prefers_retry_failed(tmp_path):
+    outdir = tmp_path / "out"
+    outdir.mkdir()
+    (outdir / ".convmd_failed.txt").write_text("https://from-failed-list.example/\n", encoding="utf-8")
+    input_file = tmp_path / "urls.txt"
+    input_file.write_text("https://from-input-file.example/\n", encoding="utf-8")
+
+    cfg = _cfg("unused", outdir, input_file=input_file, retry_failed=True)
+    with patch("convmd.routing.dispatch_url") as mock_dispatch:
+        pipeline.extract_phase(cfg, start_time=0)
+
+    assert mock_dispatch.call_args[0][0] == "https://from-failed-list.example/"
+
+
 # --- transform_phase ---
 
 @patch("convmd.pipeline.transform_markdown_with_gemini")
