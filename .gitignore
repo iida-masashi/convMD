@@ -26,7 +26,3 @@ _override.convmd.yaml
 ndl_test.*
 *.ps1
 
-# Site-specific one-off scripts (not general-purpose)
-scripts/crawl_kodaishi.py
-scripts/_discover_amabe.py
-

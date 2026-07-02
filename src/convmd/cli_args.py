@@ -44,9 +44,21 @@ class RunConfig:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="convmd", description="Web to Markdown Toolkit")
     parser.add_argument("target", help="URL, local file path, or directory path to convert")
-    parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory to write converted files to (default: ./output, or $CONVMD_OUTPUT_DIR).",
+    )
     parser.add_argument("--transform", type=str, default=None)
-    parser.add_argument("--obsidian-vault", type=Path, default=None)
+    parser.add_argument(
+        "--obsidian-vault",
+        type=Path,
+        default=None,
+        help="Write output directly into this Obsidian vault. Takes precedence over "
+        "--output-dir unless --output-dir was itself explicit on the command line "
+        "and --obsidian-vault came only from a config file.",
+    )
     parser.add_argument("--open-obsidian", action="store_true")
     parser.add_argument("--notebooklm", type=str, default=None)
     parser.add_argument("--auto-link", action="store_true")

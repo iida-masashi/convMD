@@ -183,16 +183,21 @@ CLI 引数が多くなる場合、YAML ファイルにデフォルトを書い�
 
 ```yaml
 # ~/.convmd.yaml もしくは ./.convmd.yaml
-obsidian_vault: ~/Obsidian/MyVault
 output_dir: ./output
 auto_link: true
 normalize_tags: true
 tag_similarity_cutoff: 0.9
 slack_webhook: https://hooks.slack.com/services/...
 podcast_limit: 3
+
+# Obsidian Vault に直接書き出したい場合のみ設定する。
+# 設定すると --output-dir より優先されるので、Obsidian を使わない場合は書かないこと。
+# obsidian_vault: ~/Obsidian/MyVault
 ```
 
 キー名は CLI のフラグ名(`--obsidian-vault` → `obsidian_vault`)と同じ snake_case を使います。未知のキーは警告ログを出して無視されます。
+
+**注意**: `obsidian_vault` を設定ファイルに書いた状態でも、コマンドラインで明示的に `--output-dir` を指定すればそちらが優先されます（`--obsidian-vault` を CLI でも指定した場合を除く）。
 
 ### Obsidian Vault のタグ正規化 (`--normalize-tags`)
 `--auto-link` で AI 生成タグを使う際、`--normalize-tags` を有効にすると **既存 Vault のタグ集合と照合してタグを正規化** します。

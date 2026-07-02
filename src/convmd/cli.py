@@ -29,13 +29,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _flag_explicit_on_argv(argv: list[str], *flags: str) -> bool:
+    """Check whether any of ``flags`` (e.g. ``--output-dir``) was typed on the command line,
+    as opposed to only being populated via ``parser.set_defaults(**yaml_defaults)``."""
+    return any(token in flags or any(token.startswith(f"{flag}=") for flag in flags) for token in argv)
+
+
 def _resolve_output_dir(args: argparse.Namespace) -> Path:
     obsidian_vault = getattr(args, "obsidian_vault", None)
-    if obsidian_vault:
+    output_dir = getattr(args, "output_dir", None)
+
+    # A YAML-configured obsidian_vault must not silently override an output_dir the
+    # user explicitly typed on the command line (see docs: config precedence is
+    # CLI > --config > ./.convmd.yaml > ~/.convmd.yaml). If the user typed
+    # --obsidian-vault on the CLI too, it still wins (explicit beats explicit).
+    argv = sys.argv[1:]
+    vault_explicit = _flag_explicit_on_argv(argv, "--obsidian-vault")
+    output_dir_explicit = _flag_explicit_on_argv(argv, "--output-dir")
+    if obsidian_vault and (vault_explicit or not output_dir_explicit):
         path = Path(obsidian_vault).resolve()
         path.mkdir(parents=True, exist_ok=True)
         return path
-    output_dir = getattr(args, "output_dir", None)
+    if obsidian_vault and output_dir_explicit:
+        logger.warning(
+            "Both --output-dir (CLI) and obsidian_vault (config) are set; "
+            f"using --output-dir={output_dir} because it was explicit on the command line."
+        )
     return get_output_dir(Path(output_dir) if output_dir else None)
 
 
