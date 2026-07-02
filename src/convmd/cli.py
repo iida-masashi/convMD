@@ -29,23 +29,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _flag_explicit_on_argv(argv: list[str], *flags: str) -> bool:
-    """Check whether any of ``flags`` (e.g. ``--output-dir``) was typed on the command line,
-    as opposed to only being populated via ``parser.set_defaults(**yaml_defaults)``."""
-    return any(token in flags or any(token.startswith(f"{flag}=") for flag in flags) for token in argv)
+def _resolve_output_dir(args: argparse.Namespace, yaml_defaults: dict[str, object]) -> Path:
+    """Resolve the effective output directory.
 
-
-def _resolve_output_dir(args: argparse.Namespace) -> Path:
+    ``args.output_dir``/``args.obsidian_vault`` are ambiguous on their own: argparse's
+    ``set_defaults(**yaml_defaults)`` makes them truthy whether the user actually typed
+    the flag or it only came from config. So precedence is decided from
+    ``(args, yaml_defaults)`` directly, which is immune to flag abbreviation (unlike
+    sniffing ``sys.argv`` for exact ``--output-dir``/``--obsidian-vault`` tokens):
+    an explicit CLI value differs from the raw YAML dict value, a config-only one matches it.
+    """
     obsidian_vault = getattr(args, "obsidian_vault", None)
     output_dir = getattr(args, "output_dir", None)
+
+    def _is_cli_explicit(name: str, value: object) -> bool:
+        if value is None:
+            return False
+        yaml_value = yaml_defaults.get(name)
+        return yaml_value is None or Path(str(value)) != Path(str(yaml_value))
+
+    vault_explicit = _is_cli_explicit("obsidian_vault", obsidian_vault)
+    output_dir_explicit = _is_cli_explicit("output_dir", output_dir)
 
     # A YAML-configured obsidian_vault must not silently override an output_dir the
     # user explicitly typed on the command line (see docs: config precedence is
     # CLI > --config > ./.convmd.yaml > ~/.convmd.yaml). If the user typed
     # --obsidian-vault on the CLI too, it still wins (explicit beats explicit).
-    argv = sys.argv[1:]
-    vault_explicit = _flag_explicit_on_argv(argv, "--obsidian-vault")
-    output_dir_explicit = _flag_explicit_on_argv(argv, "--output-dir")
     if obsidian_vault and (vault_explicit or not output_dir_explicit):
         path = Path(obsidian_vault).resolve()
         path.mkdir(parents=True, exist_ok=True)
@@ -96,7 +105,7 @@ def main() -> None:
         parser.set_defaults(**yaml_defaults)
     args = parser.parse_args()
 
-    output_dir = _resolve_output_dir(args)
+    output_dir = _resolve_output_dir(args, yaml_defaults or {})
     logger.info(f"Output directory set to: {output_dir}")
 
     cfg = to_run_config(args, output_dir)
