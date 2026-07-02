@@ -92,3 +92,12 @@ def estimate_reading_time(text: str, *, cjk_chars_per_min: int = 1000, latin_wor
     rest = re.findall(r"[A-Za-z0-9]+", text)
     minutes = cjk / cjk_chars_per_min + len(rest) / latin_words_per_min
     return max(1, int(round(minutes)))
+
+
+def format_seconds_as_timestamp(seconds: float) -> str:
+    """Format seconds as ``MM:SS`` or ``H:MM:SS`` for transcript/subtitle timestamps."""
+    mins, secs = divmod(int(seconds), 60)
+    hours, mins = divmod(mins, 60)
+    if hours > 0:
+        return f"{hours}:{mins:02d}:{secs:02d}"
+    return f"{mins:02d}:{secs:02d}"

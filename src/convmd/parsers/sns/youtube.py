@@ -13,7 +13,7 @@ from youtube_transcript_api import YouTubeTranscriptApi  # type: ignore
 
 from convmd.core.download import process_images
 from convmd.core.http import get_client, get_html
-from convmd.core.utils import generate_frontmatter, sanitize_filename
+from convmd.core.utils import format_seconds_as_timestamp, generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +40,7 @@ def get_video_title(video_id: str) -> str:
 
 
 def format_time(seconds: float) -> str:
-    mins, secs = divmod(int(seconds), 60)
-    hours, mins = divmod(mins, 60)
-    if hours > 0:
-        return f"{hours}:{mins:02d}:{secs:02d}"
-    return f"{mins:02d}:{secs:02d}"
+    return format_seconds_as_timestamp(seconds)
 
 
 _CHAPTER_RE = re.compile(

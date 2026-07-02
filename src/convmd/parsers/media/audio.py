@@ -1,18 +1,14 @@
 import logging
 from pathlib import Path
 
-from convmd.core.utils import generate_frontmatter, sanitize_filename
+from convmd.core.utils import format_seconds_as_timestamp, generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
 
 
 def format_timestamp(seconds: float) -> str:
     """Formats seconds into HH:MM:SS or MM:SS."""
-    mins, secs = divmod(int(seconds), 60)
-    hours, mins = divmod(mins, 60)
-    if hours > 0:
-        return f"{hours}:{mins:02d}:{secs:02d}"
-    return f"{mins:02d}:{secs:02d}"
+    return format_seconds_as_timestamp(seconds)
 
 
 def convert_audio_file(file_path: Path, output_dir: Path) -> Path | None:
