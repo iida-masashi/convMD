@@ -10,16 +10,68 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import re
+import time
 import urllib.parse
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping, TypeVar
 
 import httpx
 
 from convmd.constants import DEFAULT_TIMEOUT, USER_AGENT
 
 logger = logging.getLogger(__name__)
+
+# Internal reliability tuning, not user-facing (no CLI flags).
+_DEFAULT_MAX_RETRIES = 3
+_DEFAULT_BASE_DELAY = 0.5
+_RETRYABLE_STATUS_CODES = {429}  # plus any 5xx, checked separately
+
+_RETRYABLE_EXCEPTIONS = (httpx.TimeoutException, httpx.ConnectError, httpx.ConnectTimeout)
+
+T = TypeVar("T")
+
+
+def _is_retryable_status_error(e: httpx.HTTPStatusError) -> bool:
+    status = e.response.status_code
+    return status in _RETRYABLE_STATUS_CODES or status >= 500
+
+
+def _request_with_retry(
+    attempt_fn: Callable[[], T],
+    *,
+    url: str,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+    base_delay: float = _DEFAULT_BASE_DELAY,
+) -> T:
+    """Run ``attempt_fn`` with exponential backoff on transient failures.
+
+    Retries on network timeouts/connection errors and on 429/5xx HTTP status
+    errors. Any other exception (including 4xx status errors) propagates
+    immediately on the first attempt. On final failure, the last exception
+    is re-raised so callers' existing except-blocks handle logging/return
+    values unchanged.
+    """
+    for attempt in range(max_retries + 1):
+        reason: Exception
+        try:
+            return attempt_fn()
+        except _RETRYABLE_EXCEPTIONS as e:
+            reason = e
+        except httpx.HTTPStatusError as e:
+            if not _is_retryable_status_error(e):
+                raise
+            reason = e
+
+        if attempt == max_retries:
+            raise reason
+
+        delay = base_delay * (2**attempt) + random.uniform(0, base_delay * 0.1)
+        logger.warning(f"Retry {attempt + 1}/{max_retries} for {url} after error: {reason}")
+        time.sleep(delay)
+
+    raise AssertionError("unreachable")  # loop always returns or raises above
 
 
 def _verify_default() -> bool:
@@ -53,13 +105,22 @@ def get_json(
     *,
     timeout: float = DEFAULT_TIMEOUT,
     headers: Mapping[str, str] | None = None,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+    base_delay: float = _DEFAULT_BASE_DELAY,
 ) -> Any | None:
     """GET a URL and return parsed JSON, or None on any failure."""
-    try:
+
+    def _attempt() -> httpx.Response:
         with get_client(timeout=timeout) as client:
             response = client.get(url, headers=_default_headers(headers))
             response.raise_for_status()
-            return response.json()
+            return response
+
+    try:
+        response = _request_with_retry(
+            _attempt, url=url, max_retries=max_retries, base_delay=base_delay
+        )
+        return response.json()
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error {e.response.status_code} for {url}")
         return None
@@ -157,6 +218,8 @@ def get_html(
     timeout: float = DEFAULT_TIMEOUT,
     headers: Mapping[str, str] | None = None,
     render_js: bool = False,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+    base_delay: float = _DEFAULT_BASE_DELAY,
 ) -> str | None:
     """GET a URL and decode response text safely with charset fallback.
 
@@ -168,25 +231,32 @@ def get_html(
         return get_html_with_js(url, timeout=timeout)
 
     encoded_url = encode_url_path(url)
-    try:
+
+    def _attempt() -> httpx.Response:
         with get_client(timeout=timeout) as client:
             response = client.get(encoded_url, headers=_default_headers(headers))
             response.raise_for_status()
-            charset = _resolve_charset(response.headers.get("content-type", ""), response.content)
-            try:
-                html = response.content.decode(charset, errors="replace")
-            except LookupError:
-                html = response.content.decode("utf-8", errors="replace")
+            return response
 
-            # Auto-detect SPA
-            if is_spa_empty(html):
-                logger.info(
-                    f"Auto-detected SPA shell for {url}. Falling back to Playwright rendering..."
-                )
-                js_html = get_html_with_js(url, timeout=timeout)
-                return js_html if js_html else html
+    try:
+        response = _request_with_retry(
+            _attempt, url=url, max_retries=max_retries, base_delay=base_delay
+        )
+        charset = _resolve_charset(response.headers.get("content-type", ""), response.content)
+        try:
+            html = response.content.decode(charset, errors="replace")
+        except LookupError:
+            html = response.content.decode("utf-8", errors="replace")
 
-            return html
+        # Auto-detect SPA
+        if is_spa_empty(html):
+            logger.info(
+                f"Auto-detected SPA shell for {url}. Falling back to Playwright rendering..."
+            )
+            js_html = get_html_with_js(url, timeout=timeout)
+            return js_html if js_html else html
+
+        return html
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error {e.response.status_code} for {url}")
         return None
@@ -195,10 +265,18 @@ def get_html(
         return None
 
 
-def download_binary(url: str, dest: Path, *, timeout: float = DEFAULT_TIMEOUT) -> bool:
+def download_binary(
+    url: str,
+    dest: Path,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+    base_delay: float = _DEFAULT_BASE_DELAY,
+) -> bool:
     """GET a URL and stream the body to ``dest``. Returns True on success."""
     encoded_url = encode_url_path(url)
-    try:
+
+    def _attempt() -> None:
         with get_client(timeout=timeout) as client:
             with client.stream("GET", encoded_url, headers=_default_headers()) as response:
                 response.raise_for_status()
@@ -206,6 +284,9 @@ def download_binary(url: str, dest: Path, *, timeout: float = DEFAULT_TIMEOUT) -
                 with dest.open("wb") as fh:
                     for chunk in response.iter_bytes():
                         fh.write(chunk)
+
+    try:
+        _request_with_retry(_attempt, url=url, max_retries=max_retries, base_delay=base_delay)
         return True
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error {e.response.status_code} downloading {url}")
