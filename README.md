@@ -19,13 +19,14 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **GitHub (`github.com`)**: README / Issue / Pull Request 本文＋コメントを取得（`GITHUB_TOKEN` で認証可）。
 - **Reddit (`reddit.com`)**: スレッド本文＋トップレベルコメント取得。
 - **Hacker News (`news.ycombinator.com`)**: 投稿本文＋上位コメント階層の取得。
-- **はてなブログ (`hatenablog.com` / `hatenablog.jp`)**, **Substack (`*.substack.com`)**, **Medium (`medium.com`)**: 本文抽出。
+- **はてなブログ (`hatenablog.com` / `hatenablog.jp` / `b.hatena.ne.jp`)**, **Substack (`*.substack.com`)**, **Medium (`medium.com`)**: 本文抽出。
 - **SpeakerDeck (`speakerdeck.com`)**: 全スライド画像のダウンロードと、Gemini OCRによる自動文字起こし。
 - **Podcast / RSS (`*.rss`, `*.xml`, `/feed`)**: 最新エピソードのMP3を自動取得し、`faster-whisper` で文字起こし。
 
 ### 🏛️ デジタルアーカイブ・画像文字起こし (IIIF & OCR)
 - **国書データベース (`kokusho.nijl.ac.jp`)**: 古典籍の書誌データ抽出と、IIIFマニフェストからの高画質画像の自動ダウンロード。
-- **AIによる古文書OCR**: ダウンロードした画像に対し、最新の Gemini API (`gemini-3.1-pro-preview` / `gemini-3-flash-preview`) を用いた高精度な文字起こし（翻刻）を自動で実行し、Markdownに追記します。
+- **国立国会図書館デジタルコレクション (`dl.ndl.go.jp`)**: IIIFマニフェスト経由での高画質画像ダウンロードとAI OCR翻刻（国書データベースと同様の仕組み）。
+- **AIによる古文書OCR**: `--ocr` フラグを指定すると、ダウンロードした画像に対し、最新の Gemini API (`gemini-3.1-pro-preview` / `gemini-3-flash-preview`) を用いた高精度な文字起こし（翻刻）を実行し、Markdownに追記します（未指定時は画像ダウンロードのみ）。
 
 ### 🎥 動画・音声 (Media & Audio)
 - **YouTube**: 動画URLからの字幕（トランスクリプト）全抽出。
@@ -119,6 +120,15 @@ uv sync
   ```
   データベースに `Source`（URL型）や `Tags`（マルチセレクト型）のプロパティがあれば自動的に設定されます（無ければスキップされ、失敗にはなりません）。
 
+- **Obsidian Local REST API 連携**:
+  Obsidian の Local REST API プラグイン経由で、生成した Markdown を直接 Vault の `Clippings` フォルダへ書き込む場合は、環境変数にURLとAPIキーを設定してください。
+  ```powershell
+  # Windows PowerShellの場合
+  $env:OBSIDIAN_REST_API_URL="https://127.0.0.1:27124"
+  $env:OBSIDIAN_REST_API_KEY="your_local_rest_api_key"
+  ```
+  両方が未設定、または通信に失敗した場合は通常の `output/` 保存にフォールバックし、処理は継続します。
+
 ---
 
 ## 💻 使い方
@@ -134,8 +144,8 @@ uv run python -m convmd.cli <対象のURL または ファイルパス>
 
 **1. デジタルアーカイブ（国書データベース）の取得**
 ```bash
-uv run python -m convmd.cli https://kokusho.nijl.ac.jp/biblio/100243699/
-# (APIキーが設定されていれば、全画像のダウンロードと同時に漢文の自動文字起こしが行われます)
+uv run python -m convmd.cli https://kokusho.nijl.ac.jp/biblio/100243699/ --ocr
+# (--ocr を指定すると、全画像のダウンロードと同時に漢文の文字起こしが行われます)
 ```
 
 **2. Zenn や Qiita の記事を取得**
@@ -188,12 +198,15 @@ uv run python -m convmd.cli https://example.com/news --diff-only
 # 既存の出力フォルダ全体を全文検索
 uv run python -m convmd.cli find "国書" --ignore-case --limit 20
 
+# 検索対象ディレクトリを指定し、フロントマターのみを対象に検索
+uv run python -m convmd.cli find "tags: 阿波説" --in ./output --frontmatter-only
+
 # セマンティック検索（ChromaDB + Gemini Embedding、キーワード一致ではなく意味の近さで検索）
 uv run python -m convmd.cli find "阿波説に関する記述" --semantic --domain example.com --title 国書
 ```
 
 ### 環境診断 (`convmd doctor`)
-`pandoc` / `ffmpeg` の PATH 有無、Gemini APIキーの設定状況、`faster-whisper` / `playwright` / `notebooklm-py` / `pillow` / `yt-dlp` などオプション依存関係のインストール状況、`playwright` を入れている場合はブラウザバイナリ（`playwright install`）の有無、`.convmd.yaml` の存在とキー内容（`obsidian_vault` が設定されている場合は `--output-dir` との優先順位の注意も表示）、`CONVMD_OUTPUT_DIR` 環境変数の設定状況をまとめて確認できます。
+Python バージョン、`pandoc` / `ffmpeg` の PATH 有無、Gemini APIキーの設定状況、`faster-whisper` / `playwright` / `notebooklm-py` / `pillow` / `yt-dlp` などオプション依存関係のインストール状況、`playwright` を入れている場合はブラウザバイナリ（`playwright install`）の有無、`.convmd.yaml` の存在とキー内容（`obsidian_vault` が設定されている場合は `--output-dir` との優先順位の注意も表示）、`CONVMD_OUTPUT_DIR` 環境変数の設定状況をまとめて確認できます。
 
 ```bash
 uv run python -m convmd.cli doctor
@@ -216,6 +229,26 @@ uv run python -m convmd.cli --retry-failed --output-dir ./output
 ```
 
 `--input-file` と `--retry-failed` を同時に指定した場合は `--retry-failed` が優先されます。なお `core/http.py` のリトライ（一時的なネットワークエラーに対する自動再試行）とは独立した仕組みで、こちらは「1回の実行内で自動リトライしても最終的に失敗したターゲット」を、実行をまたいで再試行するためのものです。
+
+### 同一ドメインのクロール取得 (`--depth`)
+指定したURLと同一ドメイン内のリンクをBFS（幅優先探索）でたどり、複数ページを一括取得します。`--depth 0`（既定）はクロールせず単一ページのみ処理します。
+
+```bash
+uv run python -m convmd.cli https://example.com/blog --depth 2
+```
+
+### 定期実行・デーモンモード (`--interval`)
+`--interval` に分数を指定すると、同じ処理を指定間隔で繰り返し実行し続けます（既定は `0` で1回のみ実行）。
+
+```bash
+uv run python -m convmd.cli https://example.com/news --interval 30   # 30分ごとに再実行
+```
+
+### その他の実行オプション
+- `--open-obsidian`: 処理完了後、`--obsidian-vault` で指定したVault側のノートをOSの既定アプリ（Obsidian URIスキーム）で開きます。`--obsidian-vault` 未指定の場合は警告を表示します。
+- `--no-cache`: `.convmd.db` によるキャッシュ・差分スキップを無効化し、常に再取得・再処理します。
+- `--slack-webhook <URL>`: `--summary` で生成したエグゼクティブサマリーを、指定したSlack Incoming Webhook URLに通知します。
+- `--podcast-limit <N>`: Podcast/RSSフィードから取得する最新エピソード数（既定 `1`）。
 
 ### 出力フォーマットの切替 (`--format`)
 ```bash
@@ -302,7 +335,7 @@ src/convmd/
 │   └── utils.py         # フロントマター / ファイル名サニタイズ
 ├── parsers/          # 各プラットフォーム別のパーサ群
 │   ├── general.py / office.py
-│   ├── media/        # zenn, qiita, wikipedia, kokusho, audio, hatena, substack, medium, speakerdeck, podcast
+│   ├── media/        # zenn, qiita, wikipedia, kokusho, naj, ndl, audio, hatena, substack, medium, speakerdeck, podcast
 │   └── sns/          # note, grok(X/Twitter), youtube, github, reddit, hackernews
 └── integrations/     # notebooklm / obsidian(_rest) / notion / slack / vault_tags
 ```
