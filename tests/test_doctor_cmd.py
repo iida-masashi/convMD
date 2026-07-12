@@ -142,6 +142,24 @@ def test_playwright_not_installed_skips_browser_check(capsys):
     assert "browser binaries" not in out
 
 
+def test_browser4_cli_found(capsys):
+    def which(name):
+        return f"/usr/bin/{name}" if name == "browser4-cli" else None
+
+    with patch("convmd.commands.doctor_cmd.shutil.which", side_effect=which):
+        run_doctor(_args())
+    out = capsys.readouterr().out
+    assert "[OK] browser4-cli found: /usr/bin/browser4-cli" in out
+
+
+def test_browser4_cli_missing(capsys):
+    with patch("convmd.commands.doctor_cmd.shutil.which", return_value=None):
+        run_doctor(_args())
+    out = capsys.readouterr().out
+    assert "[MISSING] browser4-cli not found on PATH" in out
+    assert "npm install -g browser4-cli" in out
+
+
 def test_config_files_none_found(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr("convmd.commands.doctor_cmd.Path.home", lambda: tmp_path / "home")
     monkeypatch.setattr("convmd.commands.doctor_cmd.Path.cwd", lambda: tmp_path / "cwd")

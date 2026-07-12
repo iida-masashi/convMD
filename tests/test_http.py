@@ -1,7 +1,7 @@
 import os
 from unittest.mock import patch
 
-from convmd.core.http import _resolve_charset, _verify_default, encode_url_path
+from convmd.core.http import _resolve_charset, _verify_default, encode_url_path, get_html_with_js
 
 
 def test_encode_url_path_idempotent():
@@ -42,3 +42,34 @@ def test_resolve_charset_meta_short_form():
 
 def test_resolve_charset_defaults_to_utf8():
     assert _resolve_charset("text/html", b"<html><body>hi</body></html>") == "utf-8"
+
+
+def test_get_html_with_js_falls_back_to_browser4_when_playwright_missing():
+    with patch("convmd.core.http._get_html_with_browser4_fallback", return_value="<html>b4</html>") as fallback:
+        with patch.dict("sys.modules", {"playwright": None, "playwright.sync_api": None}):
+            html = get_html_with_js("https://example.com")
+    assert html == "<html>b4</html>"
+    fallback.assert_called_once()
+
+
+def test_get_html_with_js_falls_back_to_browser4_when_playwright_raises():
+    class _FakeSyncPlaywright:
+        def __enter__(self):
+            raise RuntimeError("boom")
+
+        def __exit__(self, *exc):
+            return False
+
+    with patch("playwright.sync_api.sync_playwright", return_value=_FakeSyncPlaywright()), patch(
+        "convmd.core.http._get_html_with_browser4_fallback", return_value="<html>b4</html>"
+    ) as fallback:
+        html = get_html_with_js("https://example.com")
+    assert html == "<html>b4</html>"
+    fallback.assert_called_once()
+
+
+def test_browser4_fallback_returns_none_when_cli_missing():
+    from convmd.core.http import _get_html_with_browser4_fallback
+
+    with patch("convmd.core.browser4.is_available", return_value=False):
+        assert _get_html_with_browser4_fallback("https://example.com", timeout=10) is None

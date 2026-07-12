@@ -85,6 +85,16 @@ def _check_optional_extras() -> list[str]:
     return lines
 
 
+def _check_browser4_cli() -> str:
+    path = shutil.which("browser4-cli")
+    if path:
+        return f"[OK] browser4-cli found: {path} (Playwright rendering fallback)"
+    return (
+        "[MISSING] browser4-cli not found on PATH -- "
+        "unavailable as a --render-js fallback (npm install -g browser4-cli)"
+    )
+
+
 def _check_playwright_browsers() -> str | None:
     """If playwright is installed, check whether its browser binaries are present.
 
@@ -151,6 +161,8 @@ def run_doctor(args: argparse.Namespace) -> None:
     playwright_line = _check_playwright_browsers()
     if playwright_line:
         lines.append(playwright_line)
+
+    lines.append(_check_browser4_cli())
 
     lines.extend(_check_config_files())
     lines.append(_check_output_dir_env())

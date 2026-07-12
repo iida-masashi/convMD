@@ -156,7 +156,11 @@ def encode_url_path(url: str) -> str:
 
 
 def get_html_with_js(url: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
-    """GET a URL and return fully rendered HTML using Playwright."""
+    """GET a URL and return fully rendered HTML using Playwright.
+
+    Falls back to browser4-cli (a separately installed Node.js CLI, see
+    ``core/browser4.py``) if Playwright is missing or fails to render the page.
+    """
     try:
         from playwright.sync_api import sync_playwright
 
@@ -170,11 +174,20 @@ def get_html_with_js(url: str, timeout: float = DEFAULT_TIMEOUT) -> str | None:
             browser.close()
             return content
     except ImportError:
-        logger.error("Playwright not installed. Run 'uv add playwright' to use --render-js.")
-        return None
+        logger.error("Playwright not installed. Falling back to browser4-cli if available.")
+        return _get_html_with_browser4_fallback(url, timeout)
     except Exception as e:
-        logger.error(f"Playwright failed for {url}: {e}")
+        logger.error(f"Playwright failed for {url}: {e}. Falling back to browser4-cli if available.")
+        return _get_html_with_browser4_fallback(url, timeout)
+
+
+def _get_html_with_browser4_fallback(url: str, timeout: float) -> str | None:
+    from convmd.core.browser4 import get_html_with_browser4, is_available
+
+    if not is_available():
+        logger.error("browser4-cli not found on PATH. Install via 'npm install -g browser4-cli'.")
         return None
+    return get_html_with_browser4(url, timeout=timeout)
 
 
 def is_spa_empty(html: str) -> bool:

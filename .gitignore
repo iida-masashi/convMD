@@ -26,3 +26,6 @@ _override.convmd.yaml
 ndl_test.*
 *.ps1
 
+# browser4-cli session/snapshot state (written to CWD by the CLI itself)
+.browser4-cli/
+
