@@ -889,6 +889,7 @@ source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "chromadb" },
+    { name = "firecrawl-anydoc" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "markdownify" },
@@ -940,6 +941,7 @@ requires-dist = [
     { name = "chromadb", specifier = ">=1.5.9" },
     { name = "convmd", extras = ["whisper", "render", "notebooklm", "image", "scripts"], marker = "extra == 'all'" },
     { name = "faster-whisper", marker = "extra == 'whisper'", specifier = ">=1.0.1" },
+    { name = "firecrawl-anydoc", specifier = ">=0.1.6" },
     { name = "google-genai", specifier = ">=2.0.1" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "markdownify", specifier = ">=0.12.1" },
@@ -1220,7 +1222,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1252,6 +1254,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/35/94/00f2059e4835eace3ae8fde680b932c496f8ec7bdc99168dfa53fb2e6b79/filelock-3.29.7.tar.gz", hash = "sha256:5b481979797ae69e72f0b389d89a80bdd585c260c5b3f1fb9c0a5ba9bb3f195d", size = 71521, upload-time = "2026-07-08T05:46:58.716Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/02/be4a57b60c7149b55b9e3b3c13f609cd8eb5307c751f22bd8fb8d262e75b/filelock-3.29.7-py3-none-any.whl", hash = "sha256:987db6f789a3a2a59f55081801b2b3697cb97e2a736b5f1a9e99b559285fbc51", size = 46036, upload-time = "2026-07-08T05:46:57.53Z" },
+]
+
+[[package]]
+name = "firecrawl-anydoc"
+version = "0.1.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/a1/d9c9675eab93cf3780ca784bba572252ca717b4e9cb4ab6363f42e573a19/firecrawl_anydoc-0.1.6.tar.gz", hash = "sha256:c23806b2228a7bee2fb2d9accdfae1ba5062e46a292285781ac4bdbd87fff35b", size = 190241, upload-time = "2026-08-05T18:29:23.785Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/9e/7bea14ed71bec4678d4daad1610e7eef850301f28e2122bdffe6d997d9d8/firecrawl_anydoc-0.1.6-cp310-abi3-macosx_10_12_x86_64.whl", hash = "sha256:996aa4ff2848b0b4a259421561364ff888202744ec257ccdba09111488ebdfbf", size = 3326951, upload-time = "2026-08-05T18:29:12.61Z" },
+    { url = "https://files.pythonhosted.org/packages/ca/af/342a3fcaab2d6cc80ecf636cbab9e3b29205467c21cf1ec6dbf9e2a77814/firecrawl_anydoc-0.1.6-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:f102e87c004bcf6de979a1697776774454f814d85893e47fedc58fdf838a2f9b", size = 3175663, upload-time = "2026-08-05T18:29:14.405Z" },
+    { url = "https://files.pythonhosted.org/packages/78/64/97f90fea4b77457fd5cb13d30aefed2f64ffc34e89764e789ed1520d5a2f/firecrawl_anydoc-0.1.6-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6c9acbeb860656205677b7991cf17a39241968e0533f6fe1b9d24bb7688e63d6", size = 3220877, upload-time = "2026-08-05T18:29:15.926Z" },
+    { url = "https://files.pythonhosted.org/packages/db/0b/d2943ee6b5eab1a673fe96333070b67232e819cc39728294a7034176006f/firecrawl_anydoc-0.1.6-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d3e65bbe6709a3a02dc4faf6af8b387016ac4ac2a5b38a70a9f950a8efa492d0", size = 3431813, upload-time = "2026-08-05T18:29:17.408Z" },
+    { url = "https://files.pythonhosted.org/packages/26/ed/7c171ee10d7eb73ddcbc3d63cdd59695bb0ea6598491ea53c79e8a152350/firecrawl_anydoc-0.1.6-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:dd80d01f72d983d6190aa37f0ee772d0e0f313baad80cd266acd0e584a7274b2", size = 3389223, upload-time = "2026-08-05T18:29:19.022Z" },
+    { url = "https://files.pythonhosted.org/packages/05/fa/02d6f34cb30b745fc99a0eba62a3028e4590c2dd6be852ae2c24acc45e4c/firecrawl_anydoc-0.1.6-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:05d2c32513270d622ddade866fa67f9598eda8bc35df35cbca2d3a5f95202a09", size = 3672930, upload-time = "2026-08-05T18:29:20.449Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/53/eb2ccf69aad54fbf873b5bcf6766e240f7a94b9a22903674f262b010fadc/firecrawl_anydoc-0.1.6-cp310-abi3-win_amd64.whl", hash = "sha256:ad9134ad79fbef3d988bfc667ae083b8e18292bdeb8250e8623be251bb8229f3", size = 3491314, upload-time = "2026-08-05T18:29:22.154Z" },
 ]
 
 [[package]]
@@ -1743,7 +1760,7 @@ name = "importlib-metadata"
 version = "9.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "zipp", marker = "python_full_version < '3.15'" },
+    { name = "zipp" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a9/01/15bb152d77b21318514a96f43af312635eb2500c96b55398d020c93d86ea/importlib_metadata-9.0.0.tar.gz", hash = "sha256:a4f57ab599e6a2e3016d7595cfd72eb4661a5106e787a95bcc90c7105b831efc", size = 56405, upload-time = "2026-03-20T06:42:56.999Z" }
 wheels = [
@@ -2761,11 +2778,11 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "flatbuffers", marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "packaging", marker = "python_full_version < '3.11'" },
-    { name = "protobuf", marker = "python_full_version < '3.11'" },
-    { name = "sympy", marker = "python_full_version < '3.11'" },
+    { name = "flatbuffers" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "packaging" },
+    { name = "protobuf" },
+    { name = "sympy" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/15/41/3253db975a90c3ce1d475e2a230773a21cd7998537f0657947df6fb79861/onnxruntime-1.24.3-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:3e6456801c66b095c5cd68e690ca25db970ea5202bd0c5b84a2c3ef7731c5a3c", size = 17332766, upload-time = "2026-03-05T17:18:59.714Z" },
@@ -2815,11 +2832,11 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "flatbuffers", marker = "python_full_version >= '3.11'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "flatbuffers" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "packaging", marker = "python_full_version >= '3.11'" },
-    { name = "protobuf", marker = "python_full_version >= '3.11'" },
+    { name = "packaging" },
+    { name = "protobuf" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d4/e4/5353d7e09ced4a8f473f843223fc75d726b2b5519dcefc12f22a6c92852d/onnxruntime-1.27.0-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:8ba14a38c570087f3cdb8cfba33f7a38a1e826c1e5b29e17c28ceda0cc910016", size = 18416484, upload-time = "2026-06-15T22:43:43.894Z" },
@@ -3048,10 +3065,10 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "python-dateutil", marker = "python_full_version < '3.11'" },
-    { name = "pytz", marker = "python_full_version < '3.11'" },
-    { name = "tzdata", marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" } },
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "tzdata" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/01/d40b85317f86cf08d853a4f495195c73815fdf205eef3993821720274518/pandas-2.3.3.tar.gz", hash = "sha256:e05e1af93b977f7eafa636d043f9f94c7ee3ac81af99c13508215942e64c993b", size = 4495223, upload-time = "2025-09-29T23:34:51.853Z" }
 wheels = [
@@ -3125,10 +3142,10 @@ resolution-markers = [
     "python_full_version == '3.11.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "python-dateutil", marker = "python_full_version >= '3.11'" },
-    { name = "tzdata", marker = "(python_full_version >= '3.11' and sys_platform == 'emscripten') or (python_full_version >= '3.11' and sys_platform == 'win32')" },
+    { name = "python-dateutil" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f8/87/4341c6252d1c47b08768c3d25ac487362bf403f0313ddae4a2a26c9b1b4c/pandas-3.0.3.tar.gz", hash = "sha256:696a4a00a2a2a35d4e5deb3fc946641b96c944f02230e4f76137fe35d806c4fc", size = 4651414, upload-time = "2026-05-11T18:54:29.21Z" }
 wheels = [
@@ -4506,8 +4523,8 @@ name = "standard-aifc"
 version = "3.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "audioop-lts", marker = "python_full_version >= '3.13'" },
-    { name = "standard-chunk", marker = "python_full_version >= '3.13'" },
+    { name = "audioop-lts" },
+    { name = "standard-chunk" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c4/53/6050dc3dde1671eb3db592c13b55a8005e5040131f7509cef0215212cb84/standard_aifc-3.13.0.tar.gz", hash = "sha256:64e249c7cb4b3daf2fdba4e95721f811bde8bdfc43ad9f936589b7bb2fae2e43", size = 15240, upload-time = "2024-10-30T16:01:31.772Z" }
 wheels = [
@@ -4528,7 +4545,7 @@ name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "mpmath", marker = "python_full_version < '3.11'" },
+    { name = "mpmath" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
 wheels = [

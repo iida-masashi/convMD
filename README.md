@@ -33,7 +33,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **ローカル音声/動画ファイル (`.mp3`, `.m4a`, `.mp4` など)**: `faster-whisper` を用いたオフラインでの高精度な自動文字起こし（※要FFmpeg）。
 
 ### 📄 ローカルファイル・汎用抽出
-- **Office / PDF文書**: Microsoft `markitdown` エンジンを利用した PowerPoint, Excel, Word 等からのテキスト・Markdown抽出。
+- **Office / PDF文書**: `anydoc`（Rust製、高速・高品質）を優先的に利用し、非対応の場合（スキャンPDF等）は Microsoft `markitdown` エンジンにフォールバックして PowerPoint, Excel, Word 等からのテキスト・Markdown抽出を行う。
 - **一般的なWebサイト**: `Readability` 相当のアルゴリズムを用いた、汎用的なニュース・ブログの本文抽出。
 
 ### ✨ ハイブリッド自律抽出エンジン (Hybrid Extraction)

@@ -1,11 +1,24 @@
 import logging
 from pathlib import Path
 
+import anydoc
 from markitdown import MarkItDown
 
 from convmd.core.utils import generate_frontmatter, sanitize_filename
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_to_markdown_text(file_path: Path) -> str:
+    # anydoc is faster and produces cleaner tables, but can't OCR scanned
+    # PDFs or handle encrypted files; MarkItDown covers those cases.
+    try:
+        return anydoc.to_markdown(str(file_path))
+    except anydoc.ConvertError as e:
+        logger.info(f"anydoc could not convert {file_path.name} ({e}); falling back to MarkItDown")
+        md_engine = MarkItDown()
+        result = md_engine.convert(str(file_path))
+        return str(result.text_content)
 
 
 def convert_office_file(
@@ -16,18 +29,17 @@ def convert_office_file(
     schema: str | None = None,
 ) -> Path | None:
     """
-    Converts local Office files (PPTX, XLSX, DOCX, PDF, etc.) to Markdown using MarkItDown.
+    Converts local Office files (PPTX, XLSX, DOCX, PDF, etc.) to Markdown
+    using anydoc (falling back to MarkItDown when unsupported).
     """
-    logger.info(f"Attempting to convert {file_path} using MarkItDown...")
+    logger.info(f"Attempting to convert {file_path}...")
 
     if not file_path.exists():
         logger.error(f"File not found: {file_path}")
         return None
 
     try:
-        md_engine = MarkItDown()
-        result = md_engine.convert(str(file_path))
-        md_content = result.text_content
+        md_content = _convert_to_markdown_text(file_path)
 
         if ai_extract:
             from convmd.core.llm_extractor import extract_with_llm
