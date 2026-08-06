@@ -96,11 +96,13 @@ def _check_browser4_cli() -> str:
 
 
 def _check_playwright_browsers() -> str | None:
-    """If playwright is installed, check whether its browser binaries are present.
+    """If playwright is installed, check whether its browser binaries are present and launchable.
 
-    Uses ``chromium.executable_path`` (a plain path lookup, no browser launch) rather than
-    actually launching chromium, since launching is slower and can fail for unrelated
-    reasons (sandboxing, missing OS deps) that aren't what this check is about.
+    First does a plain ``chromium.executable_path`` existence check (fast, no browser
+    launch). If that passes, also attempts an actual ``launch()``/``close()`` round-trip:
+    the path can exist yet still be unusable (e.g. a stale/partial revision left behind
+    after a playwright version bump replaces the expected revision folder), and that
+    mismatch only ever surfaces at launch time, not from a path check alone.
     Returns None if playwright itself isn't installed (nothing to check).
     """
     if not _is_installed("playwright"):
@@ -109,12 +111,20 @@ def _check_playwright_browsers() -> str | None:
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as p:
-            if Path(p.chromium.executable_path).exists():
-                return "[OK] playwright browser binaries found"
-        return (
-            "[WARN] playwright installed but browser binaries missing -- "
-            "run: playwright install chromium"
-        )
+            if not Path(p.chromium.executable_path).exists():
+                return (
+                    "[WARN] playwright installed but browser binaries missing -- "
+                    "run: playwright install chromium"
+                )
+            try:
+                browser = p.chromium.launch(headless=True)
+                browser.close()
+            except Exception as e:
+                return (
+                    "[WARN] playwright browser binary found but failed to launch "
+                    f"({e}) -- run: playwright install chromium"
+                )
+        return "[OK] playwright browser binaries found and launchable"
     except Exception as e:
         return f"[WARN] could not verify playwright browser binaries: {e}"
 

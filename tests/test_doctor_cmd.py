@@ -105,7 +105,9 @@ def test_optional_extras_all_installed(capsys):
 
 
 def test_playwright_browsers_installed(capsys):
+    mock_browser = MagicMock()
     mock_chromium = MagicMock(executable_path="/fake/chrome")
+    mock_chromium.launch.return_value = mock_browser
     mock_pw = MagicMock(chromium=mock_chromium)
     mock_ctx = MagicMock()
     mock_ctx.__enter__ = MagicMock(return_value=mock_pw)
@@ -116,7 +118,9 @@ def test_playwright_browsers_installed(capsys):
     ), patch("convmd.commands.doctor_cmd.Path.exists", return_value=True):
         run_doctor(_args())
     out = capsys.readouterr().out
-    assert "[OK] playwright browser binaries found" in out
+    assert "[OK] playwright browser binaries found and launchable" in out
+    mock_chromium.launch.assert_called_once_with(headless=True)
+    mock_browser.close.assert_called_once()
 
 
 def test_playwright_browsers_missing(capsys):
@@ -132,6 +136,26 @@ def test_playwright_browsers_missing(capsys):
         run_doctor(_args())
     out = capsys.readouterr().out
     assert "[WARN] playwright installed but browser binaries missing" in out
+    assert "playwright install chromium" in out
+    mock_chromium.launch.assert_not_called()
+
+
+def test_playwright_browsers_present_but_launch_fails(capsys):
+    """Covers the case a plain executable_path check can't catch: the binary exists
+    on disk but is a stale/mismatched revision that fails to actually launch."""
+    mock_chromium = MagicMock(executable_path="/fake/chrome")
+    mock_chromium.launch.side_effect = RuntimeError("Executable doesn't exist at revision path")
+    mock_pw = MagicMock(chromium=mock_chromium)
+    mock_ctx = MagicMock()
+    mock_ctx.__enter__ = MagicMock(return_value=mock_pw)
+    mock_ctx.__exit__ = MagicMock(return_value=False)
+
+    with patch("convmd.commands.doctor_cmd._is_installed", return_value=True), patch(
+        "playwright.sync_api.sync_playwright", return_value=mock_ctx
+    ), patch("convmd.commands.doctor_cmd.Path.exists", return_value=True):
+        run_doctor(_args())
+    out = capsys.readouterr().out
+    assert "[WARN] playwright browser binary found but failed to launch" in out
     assert "playwright install chromium" in out
 
 
