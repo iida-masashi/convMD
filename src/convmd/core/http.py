@@ -186,8 +186,21 @@ def _get_html_with_browser4_fallback(url: str, timeout: float) -> str | None:
 
     if not is_available():
         logger.error("browser4-cli not found on PATH. Install via 'npm install -g browser4-cli'.")
+        return _get_html_with_firecrawl_fallback(url, timeout)
+
+    html = get_html_with_browser4(url, timeout=timeout)
+    if html:
+        return html
+    return _get_html_with_firecrawl_fallback(url, timeout)
+
+
+def _get_html_with_firecrawl_fallback(url: str, timeout: float) -> str | None:
+    from convmd.core.firecrawl_fallback import get_html_with_firecrawl, is_available
+
+    if not is_available():
+        logger.error(f"FIRECRAWL_API_KEY not set; no rendering fallback left for {url}.")
         return None
-    return get_html_with_browser4(url, timeout=timeout)
+    return get_html_with_firecrawl(url, timeout=timeout)
 
 
 def is_spa_empty(html: str) -> bool:

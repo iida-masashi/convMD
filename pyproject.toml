@@ -24,11 +24,12 @@ dependencies = [
 [project.optional-dependencies]
 whisper = ["faster-whisper>=1.0.1"]
 render = ["playwright>=1.40.0"]
+firecrawl = ["firecrawl-py>=4.34.0"]
 notebooklm = ["notebooklm-py>=0.4.0"]
 image = ["pillow>=12.2.0"]
 scripts = ["yt-dlp>=2026.3.17"]
 all = [
-    "convmd[whisper,render,notebooklm,image,scripts]",
+    "convmd[whisper,render,firecrawl,notebooklm,image,scripts]",
 ]
 
 [project.scripts]

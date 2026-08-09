@@ -71,5 +71,35 @@ def test_get_html_with_js_falls_back_to_browser4_when_playwright_raises():
 def test_browser4_fallback_returns_none_when_cli_missing():
     from convmd.core.http import _get_html_with_browser4_fallback
 
-    with patch("convmd.core.browser4.is_available", return_value=False):
+    with patch("convmd.core.browser4.is_available", return_value=False), patch(
+        "convmd.core.firecrawl_fallback.is_available", return_value=False
+    ):
         assert _get_html_with_browser4_fallback("https://example.com", timeout=10) is None
+
+
+def test_browser4_fallback_falls_back_to_firecrawl_when_cli_missing():
+    from convmd.core.http import _get_html_with_browser4_fallback
+
+    with patch("convmd.core.browser4.is_available", return_value=False), patch(
+        "convmd.core.firecrawl_fallback.is_available", return_value=True
+    ), patch(
+        "convmd.core.firecrawl_fallback.get_html_with_firecrawl", return_value="<html>fc</html>"
+    ):
+        assert (
+            _get_html_with_browser4_fallback("https://example.com", timeout=10)
+            == "<html>fc</html>"
+        )
+
+
+def test_browser4_fallback_falls_back_to_firecrawl_when_browser4_fails():
+    from convmd.core.http import _get_html_with_browser4_fallback
+
+    with patch("convmd.core.browser4.is_available", return_value=True), patch(
+        "convmd.core.browser4.get_html_with_browser4", return_value=None
+    ), patch("convmd.core.firecrawl_fallback.is_available", return_value=True), patch(
+        "convmd.core.firecrawl_fallback.get_html_with_firecrawl", return_value="<html>fc</html>"
+    ):
+        assert (
+            _get_html_with_browser4_fallback("https://example.com", timeout=10)
+            == "<html>fc</html>"
+        )
