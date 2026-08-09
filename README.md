@@ -33,7 +33,7 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **ローカル音声/動画ファイル (`.mp3`, `.m4a`, `.mp4` など)**: `faster-whisper` を用いたオフラインでの高精度な自動文字起こし（※要FFmpeg）。
 
 ### 📄 ローカルファイル・汎用抽出
-- **Office / PDF文書**: `anydoc`（Rust製、高速・高品質）を優先的に利用し、非対応の場合（スキャンPDF等）は Microsoft `markitdown` エンジンにフォールバックして PowerPoint, Excel, Word 等からのテキスト・Markdown抽出を行う。
+- **Office / PDF文書**: `anydoc`（Firecrawl社製、Rust製で高速・高品質）を優先的に利用し、非対応の場合（スキャンPDF等）は Microsoft `markitdown` エンジンにフォールバックして PowerPoint, Excel, Word 等からのテキスト・Markdown抽出を行う。なお、後述のWeb抽出フォールバック「Firecrawl」（クロール/スクレイピングAPI）とは別のライブラリ。
 - **一般的なWebサイト**: `Readability` 相当のアルゴリズムを用いた、汎用的なニュース・ブログの本文抽出。
 
 ### ✨ ハイブリッド自律抽出エンジン (Hybrid Extraction)
@@ -78,6 +78,7 @@ uv sync
 |---|---|---|
 | ローカル音声ファイルの文字起こし | `uv sync --extra whisper` | 別途 FFmpeg が必要（下記） |
 | JavaScript動的レンダリング（`--render-js`） | `uv sync --extra render` | `uv run playwright install` でブラウザバイナリの追加インストールが必要 |
+| Firecrawlフォールバック（Playwright/browser4-cli失敗時の最終手段） | `uv sync --extra firecrawl` | `FIRECRAWL_API_KEY` の設定が必要（課金あり） |
 | NotebookLM連携 | `uv sync --extra notebooklm` | 別途ブラウザCookie認証が必要（`notebooklm login --browser-cookies chrome`） |
 | Gemini画像OCR | `uv sync --extra image` | |
 | `scripts/` 内の補助スクリプト（YouTube字幕取得等） | `uv sync --extra scripts` | パッケージ本体（CLI）は利用不可、`scripts/*.py` 単体で実行 |
@@ -109,6 +110,13 @@ uv sync
   ```powershell
   # Windows PowerShellの場合
   $env:XAI_API_KEY="your_xai_api_key_here"
+  ```
+
+- **Firecrawlフォールバック**:
+  Playwright と browser4-cli の両方が失敗/未導入の場合の最終手段として [Firecrawl](https://github.com/firecrawl/firecrawl) を利用します（`uv sync --extra firecrawl` で導入）。未設定の場合はこのフォールバックが無効になるだけで、他の機能には影響しません。
+  ```powershell
+  # Windows PowerShellの場合
+  $env:FIRECRAWL_API_KEY="your_firecrawl_api_key_here"
   ```
 
 - **Notion連携機能**:
