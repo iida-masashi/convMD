@@ -75,8 +75,9 @@ class UsageTracker:
             or getattr(meta, "output_tokens", 0)
             or 0
         )
+        thoughts = getattr(meta, "thoughts_token_count", None) or 0
         usage.input_tokens += int(prompt)
-        usage.output_tokens += int(out)
+        usage.output_tokens += int(out) + int(thoughts)
 
     def is_empty(self) -> bool:
         return not self.by_model

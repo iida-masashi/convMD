@@ -43,8 +43,19 @@ def test_usage_tracker_aggregates():
     response = MagicMock()
     response.usage_metadata.prompt_token_count = 10
     response.usage_metadata.candidates_token_count = 5
+    response.usage_metadata.thoughts_token_count = 0
     tracker.record("model-x", response)
     tracker.record("model-x", response)
     assert tracker.by_model["model-x"].input_tokens == 20
     assert tracker.by_model["model-x"].output_tokens == 10
     assert tracker.by_model["model-x"].calls == 2
+
+
+def test_usage_tracker_includes_thinking_tokens_in_output():
+    tracker = gemini.UsageTracker()
+    response = MagicMock()
+    response.usage_metadata.prompt_token_count = 10
+    response.usage_metadata.candidates_token_count = 5
+    response.usage_metadata.thoughts_token_count = 100
+    tracker.record("model-x", response)
+    assert tracker.by_model["model-x"].output_tokens == 105
