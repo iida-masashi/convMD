@@ -1,6 +1,32 @@
 from unittest.mock import MagicMock, patch
 
-from convmd.core.llm_extractor import extract_with_llm
+from convmd.core.llm_extractor import _ExtractedContent, extract_with_llm
+
+
+@patch("convmd.core.gemini.get_client")
+def test_extract_with_llm_uses_parsed_response(mock_get_client, tmp_path):
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+
+    mock_response = MagicMock()
+    mock_response.parsed = _ExtractedContent(
+        title="Parsed Article",
+        author="Bob",
+        date="2026-06-01",
+        content_markdown="Parsed content body.",
+        tags=["parsed"],
+    )
+    mock_client.models.generate_content.return_value = mock_response
+
+    result_path = extract_with_llm(
+        "<html><body><h1>Test</h1></body></html>", tmp_path, url="http://test.com"
+    )
+
+    assert result_path is not None
+    content = result_path.read_text(encoding="utf-8")
+    assert 'title: "Parsed Article"' in content
+    assert "Parsed content body." in content
+    assert "parsed" in content
 
 
 @patch("convmd.core.gemini.get_client")
@@ -29,6 +55,25 @@ def test_extract_with_llm_success(mock_get_client, tmp_path):
     assert 'author: "Alice"' in content
     assert "This is a test content." in content
     assert "ai_extract" in content
+
+
+@patch("convmd.core.gemini.get_client")
+def test_extract_with_llm_custom_schema_skips_response_schema(mock_get_client, tmp_path):
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+
+    mock_response = MagicMock()
+    mock_response.text = (
+        '{"title": "Custom", "content_markdown": "Body.", "tags": [], "extra_field": "value"}'
+    )
+    mock_client.models.generate_content.return_value = mock_response
+
+    result_path = extract_with_llm("<html></html>", tmp_path, schema='{"extra_field": "string"}')
+
+    assert result_path is not None
+    call_kwargs = mock_client.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].response_schema is None
+    assert "extra_field" in call_kwargs["config"].system_instruction
 
 
 @patch("convmd.core.gemini.get_client")
