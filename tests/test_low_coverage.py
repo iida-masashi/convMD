@@ -84,6 +84,51 @@ def test_convert_youtube_no_transcript(_mock_t, tmp_path):
     assert youtube.convert_youtube("https://youtu.be/abcdefghijk", tmp_path) is None
 
 
+class _FakeNewApiTranscriptList:
+    """Stands in for TranscriptList when only the new (instance) API is present."""
+
+    def find_transcript(self, languages):
+        raise LookupError("no matching transcript")
+
+    def __iter__(self):
+        transcript = MagicMock()
+        transcript.fetch.return_value = [{"start": 0.0, "text": "new-api transcript"}]
+        return iter([transcript])
+
+
+class _FakeNewApi:
+    """Mimics youtube-transcript-api >=1.0 instance API: no list_transcripts/get_transcript."""
+
+    def __init__(self, http_client=None):
+        self.http_client = http_client
+
+    def list(self, video_id):
+        return _FakeNewApiTranscriptList()
+
+
+def test_fetch_transcript_uses_new_api_when_legacy_methods_absent():
+    with patch("convmd.parsers.sns.youtube.YouTubeTranscriptApi", _FakeNewApi):
+        result = youtube._fetch_transcript("abcdefghijk")
+    assert result == [{"start": 0.0, "text": "new-api transcript"}]
+
+
+class _FakeNewApiNoTranscripts:
+    def __init__(self, http_client=None):
+        pass
+
+    def list(self, video_id):
+        raise Exception("list_transcripts failed")
+
+    def fetch(self, video_id, languages=("ja", "en")):
+        return [{"start": 0.0, "text": "fetched via new api fallback"}]
+
+
+def test_fetch_transcript_new_api_fallback_path():
+    with patch("convmd.parsers.sns.youtube.YouTubeTranscriptApi", _FakeNewApiNoTranscripts):
+        result = youtube._fetch_transcript("abcdefghijk")
+    assert result == [{"start": 0.0, "text": "fetched via new api fallback"}]
+
+
 @patch("convmd.parsers.sns.youtube.get_client")
 def test_get_video_title_success(mock_get_client):
     mock_response = MagicMock()
