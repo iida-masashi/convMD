@@ -80,9 +80,21 @@ def generate_frontmatter(
     return "\n".join(lines)
 
 
-def sanitize_filename(title: str) -> str:
-    """Sanitize a string for use as a filename across Windows/Linux/macOS."""
-    safe_title = re.sub(r'[\\/*?:"<>|]', "", title).strip()[:100]
+def sanitize_filename(title: str, max_bytes: int = 200) -> str:
+    """Sanitize a string for use as a filename across Windows/Linux/macOS.
+
+    Ensures the sanitized name does not exceed `max_bytes` in UTF-8 encoding
+    to prevent filesystem errors on Linux (ext4 255-byte limit) while stripping
+    invalid characters for Windows.
+    """
+    safe_title = re.sub(r'[\x00-\x1f\\/*?:"<>|]', "", title).strip(" .")
+    if not safe_title:
+        return "Untitled"
+
+    encoded = safe_title.encode("utf-8")
+    if len(encoded) > max_bytes:
+        safe_title = encoded[:max_bytes].decode("utf-8", errors="ignore").rstrip(" .")
+
     return safe_title if safe_title else "Untitled"
 
 
