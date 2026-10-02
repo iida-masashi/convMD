@@ -238,6 +238,22 @@ def is_spa_empty(html: str) -> bool:
     return False
 
 
+# sec.gov rejects a bare UA with 403; fda.gov answers it with 404.
+_DESCRIPTIVE_UA_HOSTS = ("sec.gov", "fda.gov")
+
+
+def _with_sec_user_agent(url: str, headers: Mapping[str, str] | None) -> Mapping[str, str] | None:
+    """Hosts in _DESCRIPTIVE_UA_HOSTS reject a bare ``Mozilla/5.0`` UA (SEC's fair-access
+    policy asks for contact info). Override via CONVMD_SEC_USER_AGENT."""
+    host = urllib.parse.urlparse(url).hostname or ""
+    if not any(host == d or host.endswith("." + d) for d in _DESCRIPTIVE_UA_HOSTS):
+        return headers
+    if headers and "User-Agent" in headers:
+        return headers
+    ua = os.environ.get("CONVMD_SEC_USER_AGENT", "convmd/0.1 (+https://github.com/iida-masashi/convMD)")
+    return {**(headers or {}), "User-Agent": ua}
+
+
 def get_html(
     url: str,
     *,
@@ -257,6 +273,7 @@ def get_html(
         return get_html_with_js(url, timeout=timeout)
 
     encoded_url = encode_url_path(url)
+    headers = _with_sec_user_agent(encoded_url, headers)
 
     def _attempt() -> httpx.Response:
         with get_client(timeout=timeout) as client:
