@@ -240,12 +240,20 @@ def is_spa_empty(html: str) -> bool:
 
 # sec.gov rejects a bare UA with 403; fda.gov answers it with 404.
 _DESCRIPTIVE_UA_HOSTS = ("sec.gov", "fda.gov")
+# These serve a browser UA but 403 on the descriptive one.
+_BROWSER_UA_HOSTS = ("labvantage.com", "technologynetworks.com")
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
 
 
 def _with_sec_user_agent(url: str, headers: Mapping[str, str] | None) -> Mapping[str, str] | None:
     """Hosts in _DESCRIPTIVE_UA_HOSTS reject a bare ``Mozilla/5.0`` UA (SEC's fair-access
     policy asks for contact info). Override via CONVMD_SEC_USER_AGENT."""
     host = urllib.parse.urlparse(url).hostname or ""
+    if any(host == d or host.endswith("." + d) for d in _BROWSER_UA_HOSTS):
+        return headers if headers and "User-Agent" in headers else {**(headers or {}), "User-Agent": _BROWSER_UA}
     if not any(host == d or host.endswith("." + d) for d in _DESCRIPTIVE_UA_HOSTS):
         return headers
     if headers and "User-Agent" in headers:
