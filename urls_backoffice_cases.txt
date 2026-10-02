@@ -1,0 +1,29 @@
+# バックオフィス領域 AI導入事例 一次情報URLリスト
+
+# 1. 会計・経理
+https://www.fastaccounting.jp/news/20240711/13165/
+https://prtimes.jp/main/html/rd/p/000000010.000040079.html
+https://kpmg.com/jp/ja/services/advisory/risk-consulting/financial-process-advisory/cfo-transformation-dx/generative-ai-finance.html
+
+# 2. 法務・コンプライアンス
+https://legalontech.jp/5475/
+https://legalontech.jp/3243/
+https://legalontech.jp/10843/
+https://prtimes.jp/main/html/rd/p/000000026.000036601.html
+https://mntsq.co.jp/news/release/case-study-tel
+https://mntsq.co.jp/news/release/mntsq-for-enterprise
+
+# 3. 人事・総務
+https://www.hitachi-solutions.co.jp/company/press/news/2025/1105.html
+https://prtimes.jp/main/html/rd/p/000000233.000022705.html
+https://www.softbank.jp/corp/news/press/sbkk/2020/20200525_01/
+
+# 4. 経営企画
+https://www.jri.co.jp/company/release/2023/0411/
+https://digital-highlights.hitachi.co.jp/_ct/17686288
+
+# 5. 監査・内部統制
+https://www.deloitte.com/jp/ja/services/audit-assurance/services/fraud-detection-model.html
+https://kpmg.com/jp/ja/services/audit/digital-audit/addressriskoffraud/fraudriskscoring_ai_introduction.html
+https://www.pwc.com/jp/ja/knowledge/prmagazine/pwcs-view/202212/41-05.html
+https://www.ey.com/ja_jp/digital-audit/ai
