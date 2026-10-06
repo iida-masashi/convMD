@@ -9,7 +9,5 @@
 
 ## Gemini
 
-- [ ] **`gemini-3.1-pro-preview` の料金表が古い**: `pipeline._PRICE_USD_PER_1M_TOKENS` は (1.25, 5.00) だが、公式は入力 $2.00 / 出力 $12.00（プロンプト ≤200k tokens）、$4.00 / $18.00（>200k）。
 - [ ] **`gemini-3.8-flash` の値上げ反映（2027-01-01）**: 入力 $0.75 → $1.50、出力 $3.75 → $7.50（1M tokens あたり）。
 - [ ] **`gemini-3.8-flash` の思考トークン**: 既定で MEDIUM 思考が有効なため、短い OCR / 抽出でも出力トークンが膨らむ（2回の呼び出しで出力約1,000 tokens）。OCR・抽出に `thinking_level="low"` を指定するか検討（`MINIMAL` は 3.8-flash では 400 エラー）。
-- [ ] **google-genai 2.28 の AFC 警告**: `generate_content` 呼び出し時に「Direct use of automatic function calling (AFC) ... is not recommended」が出る（2.17 では出ない）。動作に影響はない。抑止するなら `automatic_function_calling` を無効化する設定を渡す。

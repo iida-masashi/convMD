@@ -13,10 +13,15 @@ from pathlib import Path
 from typing import Any
 
 from google import genai
+from google.genai import types
 
 from convmd.constants import Models
 
 logger = logging.getLogger(__name__)
+
+# convMD passes no tools, so AFC is unused; disabling it also silences google-genai's
+# per-call "Direct use of automatic function calling" warning (>=2.28).
+NO_AFC = types.AutomaticFunctionCallingConfig(disable=True)
 
 
 def get_api_key() -> str | None:
@@ -100,7 +105,11 @@ def generate_text(prompt: str, *, model: str = Models.GEMINI_PRO) -> str | None:
     if client is None:
         return None
     try:
-        response = client.models.generate_content(model=model, contents=prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(automatic_function_calling=NO_AFC),
+        )
         _tracker.record(model, response)
         raw = response.text if response.text else ""
         return strip_code_fence(raw)
@@ -129,6 +138,7 @@ def transcribe_image(
         response = client.models.generate_content(
             model=model,
             contents=[prompt or default_prompt, img],
+            config=types.GenerateContentConfig(automatic_function_calling=NO_AFC),
         )
         _tracker.record(model, response)
         return response.text.strip() if response.text else ""

@@ -104,6 +104,7 @@ def extract_with_llm(
             response_mime_type="application/json",
             response_schema=None if schema else _ExtractedContent,
             temperature=1.0,
+            automatic_function_calling=gemini.NO_AFC,
         )
 
         response = client.models.generate_content(model=model, contents=html_or_text, config=config)
