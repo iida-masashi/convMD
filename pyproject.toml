@@ -11,10 +11,11 @@ dependencies = [
     "requests>=2.34.2",
     "readability-lxml>=0.8.4.1",
     "markdownify>=1.2.3",
-    "firecrawl-anydoc>=0.1.7",
-    "markitdown[all]>=0.1.5",
+    "firecrawl-anydoc>=0.1.9,<0.2",  # 0.2.x renders Japanese-era date cells as Excel serials
+    # not [all]: it caps youtube-transcript-api <1.1. <0.1.6: later versions scramble vertical (tategaki) PDF reading order
+    "markitdown[pdf,docx,pptx,xlsx,xls,outlook]>=0.1.5,<0.1.6",
     "beautifulsoup4>=4.15.0",
-    "youtube-transcript-api>=1.0.3",
+    "youtube-transcript-api>=1.2.4",
     "google-genai>=2.17.0",
     "pydantic>=2.13.0",
     "pyyaml>=6.0.3",

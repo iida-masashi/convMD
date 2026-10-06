@@ -12,7 +12,7 @@ class Suffix:
 
 class Models:
     GEMINI_PRO: Final[str] = "gemini-3.1-pro-preview"
-    GEMINI_FLASH: Final[str] = "gemini-3-flash-preview"
+    GEMINI_FLASH: Final[str] = "gemini-3.8-flash"
 
 
 USER_AGENT: Final[str] = "Mozilla/5.0"

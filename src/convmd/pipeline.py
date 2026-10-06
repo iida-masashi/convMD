@@ -368,7 +368,7 @@ def run_pipeline(cfg: RunConfig) -> None:
 
 _PRICE_USD_PER_1M_TOKENS = {
     "gemini-3.1-pro-preview": (1.25, 5.00),
-    "gemini-3-flash-preview": (0.075, 0.30),
+    "gemini-3.8-flash": (0.75, 3.75),  # rises to (1.50, 7.50) on 2027-01-01
 }
 
 

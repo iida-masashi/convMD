@@ -185,3 +185,22 @@ def test_convert_office_file_empty_text_reports_no_text_layer(
     src.write_bytes(b"\x00")
 
     assert convert_office_file(src, tmp_path) is None
+
+
+def test_anydoc_keeps_excel_dates_as_dates(tmp_path):
+    # firecrawl-anydoc 0.2.x renders date cells with a Japanese-era number format
+    # ([$-411]ge.m.d, common in government xlsx) as Excel serials (1953-11-19 -> 19682);
+    # pyproject pins <0.2 until that is fixed upstream.
+    openpyxl = pytest.importorskip("openpyxl")
+    import datetime
+
+    src = tmp_path / "dates.xlsx"
+    wb = openpyxl.Workbook()
+    wb.active.append(["name", "registered"])
+    wb.active.append(["稲荷神社", datetime.date(1953, 11, 19)])
+    wb.active["B2"].number_format = r"[$-411]ge\.m\.d;@"
+    wb.save(src)
+
+    text = anydoc.to_markdown(str(src))
+    assert "1953-11-19" in text
+    assert "19682" not in text

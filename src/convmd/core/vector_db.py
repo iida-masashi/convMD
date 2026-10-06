@@ -17,6 +17,20 @@ logger = logging.getLogger(__name__)
 class GeminiEmbeddingFunction(EmbeddingFunction):
     """Custom embedding function for ChromaDB using Google GenAI SDK."""
 
+    def __init__(self) -> None:
+        pass
+
+    @staticmethod
+    def name() -> str:
+        return "convmd_gemini"
+
+    def get_config(self) -> dict[str, Any]:
+        return {}
+
+    @staticmethod
+    def build_from_config(config: dict[str, Any]) -> GeminiEmbeddingFunction:
+        return GeminiEmbeddingFunction()
+
     def __call__(self, input: Documents) -> Embeddings:
         client = get_client()
         if not client:

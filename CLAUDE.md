@@ -54,7 +54,7 @@ Each parser module exposes a `convert_<site>(url, output_dir, ...) -> Path | Non
 
 ### Gemini / cost
 
-All Gemini calls go through `core/gemini.py`, which resolves the key (`GEMINI_API_KEY` or `GOOGLE_API_KEY`), builds the client, strips code fences, and records token usage in a `UsageTracker`. Model names are constants in `constants.py` (`Models.GEMINI_PRO` = `gemini-3.1-pro-preview`, `Models.GEMINI_FLASH` = `gemini-3-flash-preview`). The cost table in `pipeline._PRICE_USD_PER_1M_TOKENS` is keyed by those model strings — update both together if a model changes.
+All Gemini calls go through `core/gemini.py`, which resolves the key (`GEMINI_API_KEY` or `GOOGLE_API_KEY`), builds the client, strips code fences, and records token usage in a `UsageTracker`. Model names are constants in `constants.py` (`Models.GEMINI_PRO` = `gemini-3.1-pro-preview`, `Models.GEMINI_FLASH` = `gemini-3.8-flash`). The cost table in `pipeline._PRICE_USD_PER_1M_TOKENS` is keyed by those model strings — update both together if a model changes.
 
 ### Cache & diff
 
@@ -67,3 +67,9 @@ All Gemini calls go through `core/gemini.py`, which resolves the key (`GEMINI_AP
 - `cli.py` re-exports `process_target`, `transform_markdown_with_gemini`, `upload_to_notebooklm` and keeps `argparse`/`time` importable at module level **for legacy test patch surfaces** — the `# noqa` comments mark these; don't remove them.
 - Use `pathlib.Path` everywhere (cross-platform; primary dev is Windows/PowerShell). Default output is `./output/`, overridable via `--output-dir` or `CONVMD_OUTPUT_DIR`; `--obsidian-vault` overrides both.
 - `scripts/` holds one-off standalone crawl/transcript scripts, not part of the package.
+
+## Dependency constraints
+
+- `firecrawl-anydoc` is pinned `<0.2`: 0.2.x renders Excel date cells with a Japanese-era number format (`[$-411]ge.m.d`, common in government xlsx) as serials (`19682`). `tests/test_office.py::test_anydoc_keeps_excel_dates_as_dates` guards this — rerun it before lifting the pin.
+- `markitdown` uses explicit extras (`pdf,docx,pptx,xlsx,xls,outlook`), not `[all]`: `[all]` caps `youtube-transcript-api` at `<1.1` (whose fetch returns empty responses) and from 0.1.6 pulls a pre-release `azure-ai-contentunderstanding`. It is also pinned `<0.1.6` because 0.1.6+ scrambles the reading order of vertical (tategaki) Japanese PDFs. `parsers/sns/youtube.py` takes the instance API path (`YouTubeTranscriptApi(http_client=...)`) on youtube-transcript-api ≥1.2.
+- `GeminiEmbeddingFunction` (`core/vector_db.py`) implements chromadb's `name`/`get_config`/`build_from_config`; collections created before this (legacy EF) still open and query fine.

@@ -26,14 +26,14 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 ### 🏛️ デジタルアーカイブ・画像文字起こし (IIIF & OCR)
 - **国書データベース (`kokusho.nijl.ac.jp`)**: 古典籍の書誌データ抽出と、IIIFマニフェストからの高画質画像の自動ダウンロード。
 - **国立国会図書館デジタルコレクション (`dl.ndl.go.jp`)**: IIIFマニフェスト経由での高画質画像ダウンロードとAI OCR翻刻（国書データベースと同様の仕組み）。
-- **AIによる古文書OCR**: `--ocr` フラグを指定すると、ダウンロードした画像に対し、最新の Gemini API (`gemini-3.1-pro-preview` / `gemini-3-flash-preview`) を用いた高精度な文字起こし（翻刻）を実行し、Markdownに追記します（未指定時は画像ダウンロードのみ）。
+- **AIによる古文書OCR**: `--ocr` フラグを指定すると、ダウンロードした画像に対し、最新の Gemini API (`gemini-3.1-pro-preview` / `gemini-3.8-flash`) を用いた高精度な文字起こし（翻刻）を実行し、Markdownに追記します（未指定時は画像ダウンロードのみ）。
 
 ### 🎥 動画・音声 (Media & Audio)
 - **YouTube**: 動画URLからの字幕（トランスクリプト）全抽出。
 - **ローカル音声/動画ファイル (`.mp3`, `.m4a`, `.mp4` など)**: `faster-whisper` を用いたオフラインでの高精度な自動文字起こし（※要FFmpeg）。
 
 ### 📄 ローカルファイル・汎用抽出
-- **Office / PDF文書**: `anydoc`（Firecrawl社製、Rust製で高速・高品質）を優先的に利用し、非対応の場合（スキャンPDF等）は Microsoft `markitdown` エンジンにフォールバックして PowerPoint, Excel, Word 等からのテキスト・Markdown抽出を行う。なお、後述のWeb抽出フォールバック「Firecrawl」（クロール/スクレイピングAPI）とは別のライブラリ。
+- **Office / PDF文書**: `anydoc`（Firecrawl社製、Rust製で高速・高品質）を優先的に利用し、非対応の場合（スキャンPDF等）は Microsoft `markitdown` エンジンにフォールバックして PowerPoint, Excel, Word 等からのテキスト・Markdown抽出を行う。なお、後述のWeb抽出フォールバック「Firecrawl」（クロール/スクレイピングAPI）とは別のライブラリ。`anydoc` は 0.1 系に固定している（0.2 系は和暦書式 `[$-411]ge.m.d` の Excel 日付セルをシリアル値（例: `19682`）で出力するため）。`markitdown` も 0.1.5 に固定している（0.1.6 以降は縦書きPDFの読み順が崩れるため）。
 - **一般的なWebサイト**: `Readability` 相当のアルゴリズムを用いた、汎用的なニュース・ブログの本文抽出。
 
 ### ✨ ハイブリッド自律抽出エンジン (Hybrid Extraction)
