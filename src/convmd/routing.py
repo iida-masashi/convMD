@@ -37,6 +37,11 @@ def _is_binary_url(target_url: str) -> bool:
     return urlparse(target_url).path.lower().endswith(_OFFICE_SUFFIXES)
 
 
+def _is_edinet_target(target_url: str) -> bool:
+    """``edinet:<code>`` is an API target, not a web page; HTML/LLM fallbacks don't apply."""
+    return urlparse(target_url).scheme == "edinet"
+
+
 # A result whose body (frontmatter excluded) is shorter than this is treated as a failed
 # extraction and retried with AI. Counting raw file bytes let a frontmatter-only file
 # with a long title/URL pass as a success.
@@ -113,6 +118,13 @@ def _route_twitter(predicate: Predicate) -> tuple[Predicate, Handler]:
 
 def _build_routes() -> list[tuple[Predicate, Handler]]:
     routes: list[tuple[Predicate, Handler]] = [
+        _route(
+            lambda p: p.scheme == "edinet",
+            "convmd.parsers.media.edinet",
+            "convert_edinet",
+            "Detected EDINET target. Fetching XBRL CSV via EDINET API...",
+            pass_cfg_kwargs=("edinet_days",),
+        ),
         _route_note(_has_domain("note.com")),
         _route_twitter(_has_domain("x.com", "twitter.com")),
         _route(
@@ -278,7 +290,7 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
     # where get_html would force-decode the body as text and feed garbage to
     # the LLM. Those fall through to the office route, which downloads via
     # download_binary and runs markitdown (which itself honors ai_extract).
-    if cfg.ai_extract and not _is_binary_url(target_url):
+    if cfg.ai_extract and not _is_binary_url(target_url) and not _is_edinet_target(target_url):
         from convmd.core.http import get_html
         from convmd.core.llm_extractor import extract_with_llm
 
@@ -288,7 +300,7 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
             return
 
     parsed = urlparse(target_url)
-    is_binary = _is_binary_url(target_url)
+    is_binary = _is_binary_url(target_url) or _is_edinet_target(target_url)
     for predicate, handler in _routes():
         if predicate(parsed):
             try:

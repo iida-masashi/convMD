@@ -28,6 +28,9 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **国立国会図書館デジタルコレクション (`dl.ndl.go.jp`)**: IIIFマニフェスト経由での高画質画像ダウンロードとAI OCR翻刻（国書データベースと同様の仕組み）。
 - **AIによる古文書OCR**: `--ocr` フラグを指定すると、ダウンロードした画像に対し、最新の Gemini API (`gemini-3.1-pro-preview` / `gemini-3.8-flash`) を用いた高精度な文字起こし（翻刻）を実行し、Markdownに追記します（未指定時は画像ダウンロードのみ）。
 
+### 📊 有価証券報告書・決算データ (EDINET API v2)
+- **`edinet:<書類管理番号>` / `edinet:<証券コード>` / `edinet:<EDINETコード>`**: 金融庁 EDINET API v2 の XBRL→CSV データ（`type=5`）を取得し、「主要な経営指標等」「財務諸表（J-GAAP/IFRS）」「その他の数値項目」を連結・個別別の Markdown 表にします。値は CSV のまま転記（単位換算なし）するため、AI抽出と違い数値の取り違えが起きません。会社指定時は直近の有価証券報告書・四半期報告書・半期報告書（CSVあり・取下げなし）を自動で探します（要 `EDINET_API_KEY`）。
+
 ### 🎥 動画・音声 (Media & Audio)
 - **YouTube**: 動画URLからの字幕（トランスクリプト）全抽出。
 - **ローカル音声/動画ファイル (`.mp3`, `.m4a`, `.mp4` など)**: `faster-whisper` を用いたオフラインでの高精度な自動文字起こし（※要FFmpeg）。
@@ -39,6 +42,8 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 ### ✨ ハイブリッド自律抽出エンジン (Hybrid Extraction)
 - **Tier 1 (Static)**: `Readability` や専用パーサーによる高速・低コストな抽出。
 - **Tier 2 (AI-Driven)**: 既存の解析が失敗した場合や、`--ai-extract` 指定時に、Gemini 3 がDOM構造を自律的に解析して Markdown 化します（本質的なコンテンツの抽出、メタデータの自動付与）。
+- **AI抽出の数値照合**: AI抽出したファイルには frontmatter に `extraction: "ai"` が付きます。本文中の3桁以上の数値が元ページに見つからない場合（AIの計算・単位換算・誤り）は `unverified_numbers` に列挙し、本文冒頭に CAUTION を表示します。桁区切りカンマと全角数字の違いは同一視します。
+- **空抽出の検知**: frontmatter を除いた本文が100文字未満の結果は失敗とみなし、AI抽出へ自動で切り替えます。
 - **カスタムスキーマ**: `--schema` オプションに JSON 形式で抽出したい項目を指定することで、特定の情報を構造化データとして引き出すことが可能です。
 - **トランスフォーム**: 生成されたMarkdownファイルに対して、`--transform` オプションで任意の指示（例：「現代語訳して」「要約して」）を与え、Gemini API を使って内容を自動変換できます。
 - `--auto-link` で重要キーワードを Obsidian の内部リンク `[[ ]]` に自動変換、`--summary` で複数ファイル横断のエグゼクティブサマリーを生成。
@@ -104,6 +109,13 @@ uv sync
   ローカル音声ファイルの文字起こし（`faster-whisper`、`uv sync --extra whisper` で導入）を利用する場合は、システムに **FFmpeg** がインストールされている必要があります。
   - **Windows (winget)**: `winget install ffmpeg`
   - **macOS (Homebrew)**: `brew install ffmpeg`
+
+- **EDINET（有価証券報告書）取得機能**:
+  `edinet:` ターゲットには EDINET API キーが必要です（EDINET 閲覧サイトの「ログイン」からアカウントを作成して発行。手順は金融庁「[EDINET API仕様書（Version 2）](https://disclosure2dl.edinet-fsa.go.jp/guide/static/disclosure/download/ESE140206.pdf)」2-3節）。キーはログに出力されません（`Subscription-Key=***` にマスク）。
+  ```powershell
+  # Windows PowerShellの場合
+  $env:EDINET_API_KEY="your_edinet_api_key_here"
+  ```
 
 - **X / Twitter 投稿取得機能**:
   X.com / Twitter のユーザー投稿取得は xAI Grok API 経由のため、環境変数にAPIキーが必要です。
@@ -236,7 +248,22 @@ uv run python -m convmd.cli --input-file urls.txt --output-dir ./output
 uv run python -m convmd.cli --retry-failed --output-dir ./output
 ```
 
+失敗したターゲットが残った場合、および単一ターゲットで Markdown が1件も生成されなかった場合、convMD は終了コード `1` で終了します（ディレクトリ入力・`--depth` クロールは対象外）。スクリプトから呼ぶ場合は終了コードで成否を判定できます。
+
 `--input-file` と `--retry-failed` を同時に指定した場合は `--retry-failed` が優先されます。なお `core/http.py` のリトライ（一時的なネットワークエラーに対する自動再試行）とは独立した仕組みで、こちらは「1回の実行内で自動リトライしても最終的に失敗したターゲット」を、実行をまたいで再試行するためのものです。
+
+### 同名ファイルの扱い
+一般Webページ・AI抽出・EDINET の出力は、保存先に同名ファイルがあっても frontmatter の `source:` が異なれば上書きせず `_2`, `_3` … を付けて別ファイルに保存します（同じ `source:` なら上書き更新）。タイトルが共通の株価・決算サイトなどを一括取得しても結果が消えません。
+
+### EDINET 有価証券報告書の取込 (`edinet:`)
+```bash
+# 書類管理番号を直接指定
+uv run python -m convmd.cli edinet:S100XXXX
+# 証券コード（4桁/5桁）または EDINET コードで、直近の報告書を自動検索
+uv run python -m convmd.cli edinet:2914
+uv run python -m convmd.cli edinet:E00492 --edinet-days 200
+```
+EDINET API には会社別の検索がないため、日次の提出書類一覧を今日から遡って探します（土日は除外、1日1リクエスト）。`--edinet-days`（既定 `400`）で遡る日数を指定できます。訂正報告書は自動検索の対象外で、書類管理番号を直接指定すれば取得できます。出力の `source:` は API の書類URL（キーなし）、frontmatter には `doc_id`・`edinet_code`・`sec_code`・`period_end`・`extraction: "xbrl"` が入ります。
 
 ### 同一ドメインのクロール取得 (`--depth`)
 指定したURLと同一ドメイン内のリンクをBFS（幅優先探索）でたどり、複数ページを一括取得します。`--depth 0`（既定）はクロールせず単一ページのみ処理します。
@@ -257,6 +284,7 @@ uv run python -m convmd.cli https://example.com/news --interval 30   # 30分ご�
 - `--no-cache`: `.convmd.db` によるキャッシュ・差分スキップを無効化し、常に再取得・再処理します。
 - `--slack-webhook <URL>`: `--summary` で生成したエグゼクティブサマリーを、指定したSlack Incoming Webhook URLに通知します。
 - `--podcast-limit <N>`: Podcast/RSSフィードから取得する最新エピソード数（既定 `1`）。
+- `--edinet-days <N>`: `edinet:<証券コード|EDINETコード>` で直近の報告書を探す遡及日数（既定 `400`）。
 
 ### 出力フォーマットの切替 (`--format`)
 ```bash
@@ -340,10 +368,10 @@ src/convmd/
 │   ├── vector_db.py     # ChromaDB + Gemini Embedding（`convmd find --semantic`）
 │   ├── transform.py     # transform / auto-link / summary
 │   ├── download.py      # 画像/HTML 取得の互換シム
-│   └── utils.py         # フロントマター / ファイル名サニタイズ
+│   └── utils.py         # フロントマター / ファイル名サニタイズ / 同名回避（unique_output_path）
 ├── parsers/          # 各プラットフォーム別のパーサ群
 │   ├── general.py / office.py
-│   ├── media/        # zenn, qiita, wikipedia, kokusho, naj, ndl, audio, hatena, substack, medium, speakerdeck, podcast
+│   ├── media/        # zenn, qiita, wikipedia, kokusho, naj, ndl, audio, hatena, substack, medium, speakerdeck, podcast, edinet
 │   └── sns/          # note, grok(X/Twitter), youtube, github, reddit, hackernews
 └── integrations/     # notebooklm / obsidian(_rest) / notion / slack / vault_tags
 ```

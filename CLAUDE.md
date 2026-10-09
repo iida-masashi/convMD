@@ -53,6 +53,13 @@ Each parser module exposes a `convert_<site>(url, output_dir, ...) -> Path | Non
 - `core/utils.py` — `generate_frontmatter(title, url, tags=...)` and `sanitize_filename(...)`. Use these for consistent YAML frontmatter and safe filenames.
 - `core/download.py` — `process_images(body, base_url, output_dir)` for inlined image handling.
 
+### EDINET (`parsers/media/edinet.py`)
+
+- Target scheme `edinet:<docID|secCode|EDINET code>` is routed first (`p.scheme == "edinet"`) and is excluded from the `--ai-extract` shortcut and the HTML/LLM fallbacks (`_is_edinet_target`), like binary URLs.
+- Uses EDINET API v2 (spec: ESE140206.pdf): `documents.json?date=…&type=2` for daily lists, `documents/{docID}?type=5` for the XBRL_TO_CSV ZIP. Errors may arrive as HTTP 200 with a JSON body (`metadata.status` or `StatusCode`) — `_api_error` handles both. Company lookup walks daily lists back `edinet_days` (weekends skipped) because there is no per-company endpoint.
+- The key goes in the `Subscription-Key` query param; `core/http.redact` plus a filter on the `httpx` logger mask it in every log line. Keep both if you touch HTTP logging.
+- CSV is UTF-16 TSV; columns are read by Japanese header names (`要素ID`, `項目名`, `コンテキストID`, `相対年度`, `連結・個別`, `値` …) and a mismatched header raises instead of producing an empty table. Only whole-company contexts (`^[A-Za-z0-9]+(_NonConsolidatedMember)?$`) are rendered; TextBlocks and segment members are skipped. Values are copied verbatim (thousands separators only).
+
 ### Gemini / cost
 
 All Gemini calls go through `core/gemini.py`, which resolves the key (`GEMINI_API_KEY` or `GOOGLE_API_KEY`), builds the client, strips code fences, and records token usage in a `UsageTracker`. Model names are constants in `constants.py` (`Models.GEMINI_PRO` = `gemini-3.1-pro-preview`, `Models.GEMINI_FLASH` = `gemini-3.8-flash`). The cost table in `pipeline._PRICE_USD_PER_1M_TOKENS` is keyed by those model strings — update both together if a model changes.

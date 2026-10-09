@@ -35,6 +35,7 @@ class RunConfig:
     no_cache: bool = False
     show_cost: bool = True
     podcast_limit: int = 1
+    edinet_days: int = 400
     normalize_tags: bool = False
     tag_similarity_cutoff: float = 0.85
     render_js: bool = False
@@ -83,6 +84,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--no-cost", dest="show_cost", action="store_false")
     parser.add_argument("--podcast-limit", type=int, default=1)
+    parser.add_argument(
+        "--edinet-days",
+        type=int,
+        default=400,
+        help="edinet:<証券コード|EDINETコード> の最新報告書を探す遡及日数 (default: 400)",
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -183,6 +190,7 @@ def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
         no_cache=_typed(args, "no_cache", False, bool),
         show_cost=_typed(args, "show_cost", True, bool),
         podcast_limit=_typed(args, "podcast_limit", 1, int),
+        edinet_days=_typed(args, "edinet_days", 400, int),
         normalize_tags=_typed(args, "normalize_tags", False, bool),
         tag_similarity_cutoff=_typed(args, "tag_similarity_cutoff", 0.85, float),
         render_js=_typed(args, "render_js", False, bool),

@@ -33,6 +33,28 @@ _RETRYABLE_EXCEPTIONS = (httpx.TimeoutException, httpx.ConnectError, httpx.Conne
 T = TypeVar("T")
 
 
+# API keys passed as query parameters (EDINET's ``Subscription-Key``) must not reach logs;
+# httpx error messages embed the full request URL, so whole log messages are redacted.
+_SECRET_QUERY_RE = re.compile(r"(Subscription-Key=)[^&\s'\"]+", re.IGNORECASE)
+
+
+def redact(text: str) -> str:
+    return _SECRET_QUERY_RE.sub(r"\g<1>***", text)
+
+
+class _RedactFilter(logging.Filter):
+    """httpx logs every request URL at INFO; strip secrets from those records too."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if "Subscription-Key=" in message:
+            record.msg, record.args = redact(message), ()
+        return True
+
+
+logging.getLogger("httpx").addFilter(_RedactFilter())
+
+
 def _is_retryable_status_error(e: httpx.HTTPStatusError) -> bool:
     status = e.response.status_code
     return status in _RETRYABLE_STATUS_CODES or status >= 500
@@ -68,7 +90,7 @@ def _request_with_retry(
             raise reason
 
         delay = base_delay * (2**attempt) + random.uniform(0, base_delay * 0.1)
-        logger.warning(f"Retry {attempt + 1}/{max_retries} for {url} after error: {reason}")
+        logger.warning(redact(f"Retry {attempt + 1}/{max_retries} for {url} after error: {reason}"))
         time.sleep(delay)
 
     raise AssertionError("unreachable")  # loop always returns or raises above
@@ -122,10 +144,10 @@ def get_json(
         )
         return response.json()
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error {e.response.status_code} for {url}")
+        logger.error(redact(f"HTTP error {e.response.status_code} for {url}"))
         return None
     except Exception as e:
-        logger.error(f"Failed to fetch JSON from {url}: {e}")
+        logger.error(redact(f"Failed to fetch JSON from {url}: {e}"))
         return None
 
 
@@ -340,8 +362,8 @@ def download_binary(
         _request_with_retry(_attempt, url=url, max_retries=max_retries, base_delay=base_delay)
         return True
     except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error {e.response.status_code} downloading {url}")
+        logger.error(redact(f"HTTP error {e.response.status_code} downloading {url}"))
         return False
     except Exception as e:
-        logger.error(f"Failed to download {url}: {e}")
+        logger.error(redact(f"Failed to download {url}: {e}"))
         return False
