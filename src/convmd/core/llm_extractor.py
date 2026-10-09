@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import unicodedata
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from convmd.constants import Models
 from convmd.core import gemini
-from convmd.core.utils import generate_frontmatter, sanitize_filename
+from convmd.core.utils import generate_frontmatter, sanitize_filename, unique_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,38 @@ _CUSTOM_SCHEMA_JSON_PROMPT = (
     "}\n"
     "【カスタムスキーマ】\n以下の形式に従って追加情報を抽出してください：\n"
 )
+
+
+# Numbers with at least this many digits are checked against the source; shorter ones
+# (list ordinals, small counts) match almost any page by accident and add only noise.
+_MIN_VERIFY_DIGITS = 3
+_MAX_LISTED_UNVERIFIED = 20
+_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def _normalize_digits(text: str) -> str:
+    """NFKC-normalize (full-width digits/commas) and drop thousands separators."""
+    return unicodedata.normalize("NFKC", text).replace(",", "")
+
+
+def find_unverified_numbers(markdown: str, source: str) -> list[str]:
+    """Return numbers in ``markdown`` that do not appear verbatim in ``source``.
+
+    The LLM may compute, convert units, or hallucinate figures; anything not found
+    in the source text is surfaced so a human can check it before relying on it.
+    Matching is substring-based after removing thousands separators, so it is
+    lenient (a short number can match inside a longer one) but never flags a
+    figure that is actually present.
+    """
+    haystack = _normalize_digits(source)
+    unverified: list[str] = []
+    for m in _NUMBER.finditer(_normalize_digits(markdown)):
+        token = m.group(0)
+        if sum(c.isdigit() for c in token) < _MIN_VERIFY_DIGITS:
+            continue
+        if token not in haystack and token not in unverified:
+            unverified.append(token)
+    return unverified
 
 
 class _ExtractedContent(BaseModel):
@@ -130,7 +164,14 @@ def extract_with_llm(
         if "ai_extract" not in tags:
             tags.append("ai_extract")
 
-        extra = {}
+        unverified = find_unverified_numbers(content_markdown, html_or_text)
+        extra: dict[str, object] = {"extraction": "ai"}
+        if unverified:
+            logger.warning(
+                f"{len(unverified)} number(s) in the AI extract were not found in the source: "
+                f"{', '.join(unverified[:_MAX_LISTED_UNVERIFIED])}"
+            )
+            extra["unverified_numbers"] = unverified[:_MAX_LISTED_UNVERIFIED]
         if author:
             extra["author"] = author
         if date:
@@ -143,10 +184,17 @@ def extract_with_llm(
             extra=extra,
         )
 
-        full_markdown = f"{frontmatter}\n\n# {title}\n\n{content_markdown}"
+        caution = ""
+        if unverified:
+            caution = (
+                "> [!CAUTION] AI抽出\n"
+                f"> 本文中の数値{len(unverified)}件が元ページに見つかりませんでした"
+                "（frontmatter の unverified_numbers 参照）。利用前に原文で確認してください。\n\n"
+            )
+        full_markdown = f"{frontmatter}\n\n# {title}\n\n{caution}{content_markdown}"
 
         safe_title = sanitize_filename(title)
-        output_path = output_dir / f"{safe_title}.md"
+        output_path = unique_output_path(output_dir, safe_title, url or "")
 
         # Ensure directory exists
         output_dir.mkdir(parents=True, exist_ok=True)

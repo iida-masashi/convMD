@@ -37,6 +37,21 @@ def _is_binary_url(target_url: str) -> bool:
     return urlparse(target_url).path.lower().endswith(_OFFICE_SUFFIXES)
 
 
+# A result whose body (frontmatter excluded) is shorter than this is treated as a failed
+# extraction and retried with AI. Counting raw file bytes let a frontmatter-only file
+# with a long title/URL pass as a success.
+_MIN_BODY_CHARS = 100
+
+
+def _is_too_small(path: Path) -> bool:
+    from convmd.core.utils import body_text
+
+    try:
+        return len(body_text(path.read_text(encoding="utf-8", errors="ignore"))) < _MIN_BODY_CHARS
+    except OSError:
+        return True
+
+
 def _has_domain(*needles: str) -> Predicate:
     def check(p: ParseResult) -> bool:
         return any(n in p.netloc for n in needles)
@@ -283,7 +298,7 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
                 # Skip for binary URLs — get_html would decode bytes as text.
                 if not is_binary and (
                     not res_path
-                    or (res_path.exists() and res_path.stat().st_size < 200)
+                    or (res_path.exists() and _is_too_small(res_path))
                 ):
                     logger.info(f"Extraction result for {target_url} was empty or too small. Trying AI...")
                     from convmd.core.http import get_html

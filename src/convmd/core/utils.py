@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 
@@ -96,6 +97,47 @@ def sanitize_filename(title: str, max_bytes: int = 200) -> str:
         safe_title = encoded[:max_bytes].decode("utf-8", errors="ignore").rstrip(" .")
 
     return safe_title if safe_title else "Untitled"
+
+
+_SOURCE_LINE = re.compile(r'^source:\s*"?(.*?)"?\s*$', re.MULTILINE)
+
+
+def _frontmatter_source(path: Path) -> str | None:
+    """Return the ``source:`` value from a Markdown file's frontmatter, or None."""
+    try:
+        head = path.read_text(encoding="utf-8", errors="ignore")[:4000]
+    except OSError:
+        return None
+    if not head.startswith("---"):
+        return None
+    end = head.find("\n---", 3)
+    m = _SOURCE_LINE.search(head[: end if end != -1 else len(head)])
+    return m.group(1) if m else None
+
+
+def unique_output_path(output_dir: Path, safe_title: str, source_url: str) -> Path:
+    """Return ``output_dir/<safe_title>.md`` unless that file belongs to a different source.
+
+    Different pages often share a title (e.g. every page of a stock-data site), and
+    writing them to the same path silently overwrites earlier results. A file whose
+    frontmatter ``source:`` equals ``source_url`` is reused (re-fetching updates it);
+    otherwise a numbered suffix ``_2``, ``_3``, ... is appended.
+    """
+    candidate = output_dir / f"{safe_title}.md"
+    n = 2
+    while candidate.exists() and _frontmatter_source(candidate) != source_url:
+        candidate = output_dir / f"{safe_title}_{n}.md"
+        n += 1
+    return candidate
+
+
+def body_text(markdown: str) -> str:
+    """Strip a leading YAML frontmatter block and surrounding whitespace."""
+    if markdown.startswith("---"):
+        end = markdown.find("\n---", 3)
+        if end != -1:
+            markdown = markdown[end + 4 :]
+    return markdown.strip()
 
 
 def estimate_reading_time(text: str, *, cjk_chars_per_min: int = 1000, latin_words_per_min: int = 250) -> int:

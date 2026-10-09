@@ -5,7 +5,7 @@ from markdownify import markdownify as md
 from readability import Document  # type: ignore
 
 from convmd.core.download import fetch_html, process_images
-from convmd.core.utils import generate_frontmatter, sanitize_filename
+from convmd.core.utils import generate_frontmatter, sanitize_filename, unique_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,7 @@ def convert_general_website(url: str, output_dir: Path, render_js: bool = False)
 
     # Generate filename and path
     safe_title = sanitize_filename(title)
-    filename = f"{safe_title}.md"
-    file_path = output_dir / filename
+    file_path = unique_output_path(output_dir, safe_title, url)
 
     # Save the file
     file_path.write_text(frontmatter + md_body, encoding="utf-8")

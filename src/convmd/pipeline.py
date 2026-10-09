@@ -335,9 +335,31 @@ def diff_phase(files: list[Path], cfg: RunConfig) -> list[Path]:
     return survivors
 
 
-def run_once(cfg: RunConfig) -> None:
+def _extraction_failed(cfg: RunConfig, files: list[Path]) -> bool:
+    """True if the extract phase failed in a way the caller should see as an exit code.
+
+    Batch runs fail if any target is on the failed list. A single URL/file target fails
+    if it produced no Markdown. Directory and crawl runs are not judged: they legitimately
+    contain inputs that yield nothing.
+    """
+    if cfg.retry_failed or cfg.input_file:
+        from convmd.core.batch import read_failed_targets
+
+        return bool(read_failed_targets(cfg.output_dir))
+    target_path = Path(cfg.target)
+    if target_path.is_dir() or cfg.depth > 0:
+        return False
+    if not files:
+        logger.error(f"No Markdown was produced for '{cfg.target}'.")
+        return True
+    return False
+
+
+def run_once(cfg: RunConfig) -> bool:
+    """Run all phases once. Returns False if extraction failed (see ``_extraction_failed``)."""
     start_time = time.time()
     files = extract_phase(cfg, start_time)
+    ok = not _extraction_failed(cfg, files)
     files = diff_phase(files, cfg) if not cfg.no_cache else files
     files = transform_phase(files, cfg)
     files = link_phase(files, cfg)
@@ -347,10 +369,14 @@ def run_once(cfg: RunConfig) -> None:
         files_with_summary.append(summary_path)
     embed_phase(files_with_summary, cfg)
     dispatch_phase(files_with_summary, summary_path, cfg)
+    return ok
 
 
-def run_pipeline(cfg: RunConfig) -> None:
-    """Run the pipeline once, or repeatedly when ``cfg.interval > 0``."""
+def run_pipeline(cfg: RunConfig) -> bool:
+    """Run the pipeline once, or repeatedly when ``cfg.interval > 0``.
+
+    Returns False if a one-shot run's extraction failed; daemon mode always returns True.
+    """
     if cfg.interval > 0:
         logger.info(f"Starting daemon mode. Running pipeline every {cfg.interval} minutes.")
         try:
@@ -360,10 +386,11 @@ def run_pipeline(cfg: RunConfig) -> None:
                 time.sleep(cfg.interval * 60)
         except KeyboardInterrupt:
             logger.info("Daemon mode stopped by user.")
-    else:
-        run_once(cfg)
-        if cfg.show_cost and not gemini.usage_tracker().is_empty():
-            _print_cost_summary()
+        return True
+    ok = run_once(cfg)
+    if cfg.show_cost and not gemini.usage_tracker().is_empty():
+        _print_cost_summary()
+    return ok
 
 
 _PRICE_USD_PER_1M_TOKENS = {

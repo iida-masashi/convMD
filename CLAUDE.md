@@ -42,7 +42,8 @@ The flow is **CLI → routing → parser → pipeline phases**. Three modules ca
 
 - Routes resolve their handler **dynamically at dispatch time** via `_dynamic_call(module, func, ...)` (importlib + getattr), *not* by binding the function at registration. This is deliberate: it keeps `patch("convmd.parsers.sns.youtube.convert_youtube")` and similar test patches effective. Follow this pattern when adding routes — don't import parser functions at module top level into the route table.
 - A handler's standard signature is `(url, output_dir, **cfg_kwargs) -> Path | None`. Pass selected `RunConfig` fields through with `pass_cfg_kwargs=(...)` (see the kokusho/naj/ndl routes passing `ocr`/`bilingual`).
-- `dispatch_url` has **two AI fallbacks**: if a handler raises, or if its output file is `< 200` bytes, it retries with `extract_with_llm` (Gemini autonomous DOM extraction). `--ai-extract` forces this path up front.
+- `dispatch_url` has **two AI fallbacks**: if a handler raises, or if its output body (frontmatter excluded) is under `_MIN_BODY_CHARS` (100) chars, it retries with `extract_with_llm` (Gemini autonomous DOM extraction). `--ai-extract` forces this path up front.
+- Output safety: parsers that write via `core/utils.unique_output_path` (general, AI extract) never overwrite a file from a *different* `source:` — they append `_2`, `_3`, …; the same source is overwritten in place. AI extracts get `extraction: ai` frontmatter, and numbers (≥3 digits) not found in the source are listed in `unverified_numbers` with a CAUTION callout. `run_pipeline` returns False (CLI exits 1) when a single target produced no Markdown or a batch left failed targets.
 
 ### Parser contract
 

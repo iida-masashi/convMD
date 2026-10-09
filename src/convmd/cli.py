@@ -127,7 +127,9 @@ def main() -> None:
     logger.info(f"Output directory set to: {output_dir}")
 
     cfg = to_run_config(args, output_dir)
-    run_pipeline(cfg)
+    # ``is False`` (not ``not ...``) so a patched run_pipeline returning a Mock is not a failure.
+    if run_pipeline(cfg) is False:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
