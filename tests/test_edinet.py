@@ -17,6 +17,10 @@ ROWS = [
     ["jpdei_cor:CurrentPeriodEndDateDEI", "期末日", "FilingDateInstant", "提出日時点", "その他", "時点", "", "", "2025-12-31"],
     ["jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高", "Prior1YearDuration", "前期", "連結", "期間", "JPY", "円", "3000000000"],
     ["jpcrp_cor:NetSalesSummaryOfBusinessResults", "売上高", "CurrentYearDuration", "当期", "連結", "期間", "JPY", "円", "3467675000000"],
+    ["jpcrp_cor:DocumentTitleCoverPage", "表紙", "FilingDateInstant", "提出日時点", "その他", "時点", "", "", "有価証券報告書"],
+    ["jpcrp_cor:TitleAndNameOfRepresentativeCoverPage", "代表者", "FilingDateInstant", "提出日時点", "その他", "時点", "", "", "代表取締役　山田"],
+    ["jppfs_cor:NetSales", "売上高", "CurrentYearDuration", "当期", "連結", "期間", "JPY", "円", "3467675000000"],
+    ["jppfs_cor:Assets", "総資産", "CurrentYearInstant", "当期末", "連結", "時点", "JPY", "円", "5000000000000"],
     ["jppfs_cor:NetSales", "売上高", "CurrentYearDuration_NonConsolidatedMember", "当期", "個別", "期間", "JPY", "円", "1200000000"],
     ["jppfs_cor:NetSales", "売上高", "CurrentYearDuration_FoodsReportableSegmentMember", "当期", "連結", "期間", "JPY", "円", "999"],
     ["jpcrp_cor:BusinessRisksTextBlock", "事業等のリスク", "FilingDateInstant", "提出日時点", "その他", "時点", "", "", "<p>長文</p>"],
@@ -37,12 +41,18 @@ def _make_zip(path: Path, rows=ROWS, header=HEADER) -> Path:
 def test_read_and_render(tmp_path):
     rows = edinet.read_csv_rows(_make_zip(tmp_path / "a.zip"))
     dei, body = edinet.render_markdown(rows)
-    assert dei["filer"] == "テスト食品株式会社"
+    assert dei["filer"] == "テスト食品株式会社" and dei["title"] == "有価証券報告書"
     assert "## 主要な経営指標等" in body and "## 財務諸表" in body
-    # Columns follow the filing's order; values are verbatim with separators only.
-    assert "| 項目名 | 前期 | 当期 | 単位 |" in body
-    assert "| 売上高 | 3,000,000,000 | 3,467,675,000,000 | 円 |" in body
-    assert "### 個別" in body and "1,200,000,000" in body
+    # Current period first; values are verbatim with separators only.
+    assert "| 項目名 | 当期 | 前期 | 単位 |" in body
+    assert "| 売上高 | 3,467,675,000,000 | 3,000,000,000 | 円 |" in body
+    # Single-scope section: no scope heading. Multi-scope: scope / period headings,
+    # and flows (期間) and balances (時点) are separate tables.
+    summary = body.split("## 財務諸表")[0]
+    assert "### 期間" in summary and "### 連結" not in summary
+    assert "### 連結 / 期間" in body and "### 連結 / 時点" in body and "### 個別 / 期間" in body
+    assert "1,200,000,000" in body and "5,000,000,000,000" in body
+    assert "代表取締役" not in body  # non-numeric cover text excluded
     # Segment members, text blocks and empty values are dropped.
     assert "999" not in body and "長文" not in body and "従業員数" not in body
 

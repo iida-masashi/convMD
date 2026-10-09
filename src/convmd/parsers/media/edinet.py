@@ -72,6 +72,8 @@ _DEI = {
     "period_end": "jpdei_cor:CurrentPeriodEndDateDEI",
     "fiscal_year_end": "jpdei_cor:CurrentFiscalYearEndDateDEI",
 }
+_COVER_TITLE = "jpcrp_cor:DocumentTitleCoverPage"  # 有価証券報告書 / 半期報告書 ...
+_NUMERIC_RE = re.compile(r"-?\d+(\.\d+)?")
 
 
 class EdinetError(RuntimeError):
@@ -182,15 +184,32 @@ def _section_of(element: str) -> str:
     return _OTHER_SECTION
 
 
+def _year_rank(year: str) -> int:
+    """Current period first, then prior, then two periods back (当中間期 → 前中間期 → 前々期末)."""
+    if year.startswith("当"):
+        return 0
+    if year.startswith("前々"):
+        return 2
+    if year.startswith("前"):
+        return 1
+    return 9
+
+
 def render_markdown(rows: list[dict[str, str]]) -> tuple[dict[str, str], str]:
-    """Return (DEI metadata, Markdown body) for the CSV rows."""
+    """Return (DEI metadata, Markdown body) for the CSV rows.
+
+    Tables are split by section, by 連結・個別 (heading shown only when a section has more
+    than one), and by 期間/時点 so that flow items (PL/CF) and balances (BS) don't share
+    mostly-empty columns.
+    """
     by_element = {r[COL_ELEMENT]: r[COL_VALUE] for r in rows if r[COL_ELEMENT].startswith("jpdei")}
     dei = {k: by_element.get(element, "") for k, element in _DEI.items()}
+    dei["title"] = next((r[COL_VALUE] for r in rows if r[COL_ELEMENT] == _COVER_TITLE), "")
 
-    # section -> scope -> row key -> {year: value}; insertion order preserves the filing's order.
-    tables: dict[str, dict[str, dict[tuple[str, str, str], dict[str, str]]]] = {}
-    labels: dict[tuple[str, str, str], str] = {}
-    years: dict[str, dict[str, list[str]]] = {}
+    # (section, scope, period) -> row key -> {year: value}; insertion order follows the filing.
+    tables: dict[tuple[str, str, str], dict[tuple[str, str], dict[str, str]]] = {}
+    labels: dict[tuple[str, str], str] = {}
+    years: dict[tuple[str, str, str], list[str]] = {}
     for r in rows:
         element, value = r[COL_ELEMENT], (r[COL_VALUE] or "").strip()
         if (
@@ -201,13 +220,14 @@ def render_markdown(rows: list[dict[str, str]]) -> tuple[dict[str, str], str]:
         ):
             continue
         section = _section_of(element)
-        scope = r[COL_SCOPE] or "-"
+        if section == _OTHER_SECTION and not _NUMERIC_RE.fullmatch(value):
+            continue  # cover-page text (address, representative, ...) is not a figure
+        tkey = (section, r[COL_SCOPE] or "-", r.get(COL_PERIOD) or "-")
+        rkey = (element, r.get(COL_UNIT, ""))
         year = r[COL_YEAR] or "-"
-        key = (element, r.get(COL_PERIOD, ""), r.get(COL_UNIT, ""))
-        labels[key] = r[COL_LABEL]
-        cells = tables.setdefault(section, {}).setdefault(scope, {}).setdefault(key, {})
-        cells.setdefault(year, value)
-        year_list = years.setdefault(section, {}).setdefault(scope, [])
+        labels[rkey] = r[COL_LABEL]
+        tables.setdefault(tkey, {}).setdefault(rkey, {}).setdefault(year, value)
+        year_list = years.setdefault(tkey, [])
         if year not in year_list:
             year_list.append(year)
 
@@ -215,19 +235,21 @@ def render_markdown(rows: list[dict[str, str]]) -> tuple[dict[str, str], str]:
         "> [!NOTE] EDINET XBRL（CSV）の値をそのまま転記（単位は「単位」列）。"
         "テキストブロック・セグメント別の値は省略。\n"
     ]
-    order = [name for name, _ in _SECTIONS] + [_OTHER_SECTION]
-    for section in order:
-        if section not in tables:
+    for section in [name for name, _ in _SECTIONS] + [_OTHER_SECTION]:
+        keys = [k for k in tables if k[0] == section]
+        if not keys:
             continue
         out.append(f"## {section}\n")
-        for scope, table in tables[section].items():
-            cols = years[section][scope]
-            out.append(f"### {scope}\n")
+        multi_scope = len({k[1] for k in keys}) > 1
+        for tkey in keys:
+            _, scope, period = tkey
+            cols = sorted(years[tkey], key=lambda y: (_year_rank(y), years[tkey].index(y)))
+            out.append(f"### {scope} / {period}\n" if multi_scope else f"### {period}\n")
             out.append("| 項目名 | " + " | ".join(cols) + " | 単位 |")
             out.append("|---|" + "---:|" * len(cols) + "---|")
-            for key, cells in table.items():
+            for rkey, cells in tables[tkey].items():
                 vals = [_format_value(cells.get(c, "")) for c in cols]
-                out.append(f"| {labels[key]} | " + " | ".join(vals) + f" | {key[2]} |")
+                out.append(f"| {labels[rkey]} | " + " | ".join(vals) + f" | {rkey[1]} |")
             out.append("")
     return dei, "\n".join(out)
 
@@ -274,7 +296,8 @@ def convert_edinet(target: str, output_dir: Path, edinet_days: int = 400) -> Pat
         return None
 
     dei, body = render_markdown(rows)
-    title = " ".join(x for x in (dei["filer"], dei["doc_type"], dei["period_end"]) if x) or doc_id
+    doc_title = dei.pop("title") or dei["doc_type"]
+    title = " ".join(x for x in (dei["filer"], doc_title, dei["period_end"]) if x) or doc_id
     source = f"{API_BASE}/documents/{doc_id}?type=5"
     extra = {k: v for k, v in dei.items() if v and k != "filer"}
     extra["doc_id"] = doc_id
