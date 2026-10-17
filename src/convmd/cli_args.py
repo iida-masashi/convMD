@@ -41,6 +41,7 @@ class RunConfig:
     render_js: bool = False
     input_file: Path | None = None
     retry_failed: bool = False
+    workers: int = 4
     extra: dict = field(default_factory=dict)
 
 
@@ -127,6 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
         "(or --retry-failed) run. Reads <output-dir>/.convmd_failed.txt, so this "
         "must be run with the same --output-dir as the original run.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Max concurrent workers for batch processing, image downloads, and IIIF OCR (default: 4).",
+    )
     return parser
 
 
@@ -149,6 +156,20 @@ def build_doctor_parser() -> argparse.ArgumentParser:
     return argparse.ArgumentParser(
         prog="convmd doctor", description="Run environment health checks"
     )
+
+
+def build_mcp_parser() -> argparse.ArgumentParser:
+    """Parser for the ``mcp`` subcommand. Used only when first arg is literally 'mcp'."""
+    parser = argparse.ArgumentParser(
+        prog="convmd mcp", description="Run convMD as a Model Context Protocol (MCP) server"
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "sse", "streamable-http"],
+        default="stdio",
+        help="MCP transport protocol (default: stdio)",
+    )
+    return parser
 
 
 def _typed(
@@ -196,4 +217,5 @@ def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
         render_js=_typed(args, "render_js", False, bool),
         input_file=_typed(args, "input_file", None, Path),
         retry_failed=_typed(args, "retry_failed", False, bool),
+        workers=max(1, _typed(args, "workers", 4, int)),
     )

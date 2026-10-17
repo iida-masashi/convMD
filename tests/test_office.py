@@ -187,6 +187,30 @@ def test_convert_office_file_empty_text_reports_no_text_layer(
     assert convert_office_file(src, tmp_path) is None
 
 
+@patch("convmd.core.gemini.transcribe_pdf", return_value="# OCR Recovered\n\nClean text.")
+@patch("convmd.core.gemini.is_configured", return_value=True)
+@patch("convmd.parsers.office.MarkItDown")
+@patch("convmd.parsers.office.anydoc.to_markdown")
+def test_convert_office_file_falls_back_to_gemini_pdf_ocr_when_enabled(
+    mock_to_markdown, mock_markitdown_class, _mock_is_cfg, mock_transcribe_pdf, tmp_path
+):
+    """When ocr=True and PDF text extraction is empty or garbled, Gemini PDF OCR recovers it."""
+    mock_to_markdown.return_value = _ANYDOC_MOJIBAKE
+    mock_engine = MagicMock()
+    mock_engine.convert.return_value = MagicMock(text_content=_MARKITDOWN_MOJIBAKE)
+    mock_markitdown_class.return_value = mock_engine
+
+    src = tmp_path / "broken_font.pdf"
+    src.write_bytes(b"%PDF-1.4")
+
+    out = convert_office_file(src, tmp_path, ocr=True)
+    assert out is not None
+    mock_transcribe_pdf.assert_called_once_with(src)
+    content = out.read_text(encoding="utf-8")
+    assert "# OCR Recovered" in content
+    assert '- "ocr"' in content
+
+
 def test_anydoc_keeps_excel_dates_as_dates(tmp_path):
     # firecrawl-anydoc 0.2.x renders date cells with a Japanese-era number format
     # ([$-411]ge.m.d, common in government xlsx) as Excel serials (1953-11-19 -> 19682);

@@ -87,6 +87,8 @@ def test_optional_extras_all_missing(capsys):
     assert "uv sync --extra image" in out
     assert "[MISSING] yt_dlp not installed" in out
     assert "uv sync --extra scripts" in out
+    assert "[MISSING] mcp not installed" in out
+    assert "uv sync --extra mcp" in out
     # playwright not installed -> no browser-binary check line at all
     assert "browser binaries" not in out
 
@@ -102,6 +104,7 @@ def test_optional_extras_all_installed(capsys):
     assert "[OK] notebooklm_py installed" in out
     assert "[OK] PIL installed" in out
     assert "[OK] yt_dlp installed" in out
+    assert "[OK] mcp installed" in out
 
 
 def test_playwright_browsers_installed(capsys):

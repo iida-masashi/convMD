@@ -31,7 +31,12 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
     def build_from_config(config: dict[str, Any]) -> GeminiEmbeddingFunction:
         return GeminiEmbeddingFunction()
 
+    _BATCH_SIZE: int = 100
+
     def __call__(self, input: Documents) -> Embeddings:
+        if not input:
+            return cast(Embeddings, [])
+
         client = get_client()
         if not client:
             logger.error("Cannot generate embeddings: Gemini API key not set.")
@@ -39,18 +44,21 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
             # though search will be useless.
             return cast(Embeddings, [[0.0] * 3072 for _ in input])
 
+        items = list(input)
         embeddings: list[list[float]] = []
         try:
-            for text in input:
-                # Use the new gemini-embedding-2 model
+            for start in range(0, len(items), self._BATCH_SIZE):
+                batch = items[start : start + self._BATCH_SIZE]
                 res = client.models.embed_content(
                     model="gemini-embedding-2",
-                    contents=text,
+                    contents=batch,
                 )
-                if res and res.embeddings and len(res.embeddings) > 0:
-                     embeddings.append(res.embeddings[0].values)
-                else:
-                     embeddings.append([0.0] * 3072)
+                returned = res.embeddings if (res and res.embeddings) else []
+                for idx in range(len(batch)):
+                    if idx < len(returned) and returned[idx].values:
+                        embeddings.append(list(returned[idx].values))
+                    else:
+                        embeddings.append([0.0] * 3072)
         except Exception as e:
             logger.error(f"Failed to generate embeddings: {e}")
             return cast(Embeddings, [[0.0] * 3072 for _ in input])

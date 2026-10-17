@@ -11,6 +11,7 @@ dependencies = [
     "requests>=2.34.2",
     "readability-lxml>=0.8.4.1",
     "markdownify>=1.2.3",
+    "trafilatura>=2.0.0",
     "firecrawl-anydoc>=0.1.9,<0.2",  # 0.2.x renders Japanese-era date cells as Excel serials
     # not [all]: it caps youtube-transcript-api <1.1. <0.1.6: later versions scramble vertical (tategaki) PDF reading order
     "markitdown[pdf,docx,pptx,xlsx,xls,outlook]>=0.1.5,<0.1.6",
@@ -30,8 +31,9 @@ firecrawl = ["firecrawl-py>=4.34.0"]
 notebooklm = ["notebooklm-py>=0.4.0"]
 image = ["pillow>=12.2.0"]
 scripts = ["yt-dlp>=2026.3.17"]
+mcp = ["mcp>=1.6.0"]
 all = [
-    "convmd[whisper,render,firecrawl,notebooklm,image,scripts]",
+    "convmd[whisper,render,firecrawl,notebooklm,image,scripts,mcp]",
 ]
 
 [project.scripts]

@@ -304,10 +304,13 @@ def get_html(
 
     encoded_url = encode_url_path(url)
     headers = _with_sec_user_agent(encoded_url, headers)
+    req_headers: dict[str, str] = {"Accept": "text/markdown, text/html;q=0.9, */*;q=0.8"}
+    if headers:
+        req_headers.update(headers)
 
     def _attempt() -> httpx.Response:
         with get_client(timeout=timeout) as client:
-            response = client.get(encoded_url, headers=_default_headers(headers))
+            response = client.get(encoded_url, headers=_default_headers(req_headers))
             response.raise_for_status()
             return response
 
@@ -315,14 +318,16 @@ def get_html(
         response = _request_with_retry(
             _attempt, url=url, max_retries=max_retries, base_delay=base_delay
         )
-        charset = _resolve_charset(response.headers.get("content-type", ""), response.content)
+        content_type = response.headers.get("content-type", "")
+        charset = _resolve_charset(content_type, response.content)
         try:
             html = response.content.decode(charset, errors="replace")
         except LookupError:
             html = response.content.decode("utf-8", errors="replace")
 
-        # Auto-detect SPA
-        if is_spa_empty(html):
+        # Auto-detect SPA (skip when server returns direct Markdown via Content Negotiation)
+        is_markdown = content_type.lower().lstrip().startswith("text/markdown")
+        if not is_markdown and is_spa_empty(html):
             logger.info(
                 f"Auto-detected SPA shell for {url}. Falling back to Playwright rendering..."
             )

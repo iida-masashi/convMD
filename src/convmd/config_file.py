@@ -29,6 +29,7 @@ _COERCERS: dict[str, Any] = {
     "depth": int,
     "interval": int,
     "podcast_limit": int,
+    "workers": int,
 }
 
 # Allowed keys (argparse dests). Anything else is silently ignored.
@@ -56,6 +57,7 @@ _ALLOWED_KEYS = {
     "normalize_tags",
     "tag_similarity_cutoff",
     "render_js",
+    "workers",
 }
 
 

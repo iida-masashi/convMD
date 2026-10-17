@@ -59,3 +59,22 @@ def test_usage_tracker_includes_thinking_tokens_in_output():
     response.usage_metadata.thoughts_token_count = 100
     tracker.record("model-x", response)
     assert tracker.by_model["model-x"].output_tokens == 105
+
+
+@patch("convmd.core.gemini.genai.Client")
+def test_transcribe_pdf_uses_low_thinking_and_strips_fences(mock_client_class, tmp_path):
+    inst = MagicMock()
+    mock_client_class.return_value = inst
+    response = MagicMock()
+    response.text = "```markdown\n# PDF Title\n\nBody\n```"
+    inst.models.generate_content.return_value = response
+
+    pdf_file = tmp_path / "sample.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 fake bytes")
+
+    with patch.dict(os.environ, {"GEMINI_API_KEY": "x"}, clear=True):
+        out = gemini.transcribe_pdf(pdf_file)
+
+    assert out == "# PDF Title\n\nBody"
+    call_kwargs = inst.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].thinking_config == gemini.LOW_THINKING

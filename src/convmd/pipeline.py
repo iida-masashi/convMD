@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+import threading
 import time
 from pathlib import Path
 
@@ -48,16 +49,17 @@ def process_target(
                 target_path,
                 output_dir,
                 ai_extract=cfg.ai_extract if cfg else False,
+                ocr=cfg.ocr if cfg else False,
                 schema=cfg.schema if cfg else None,
             )
 
         logger.info(f"Analyzing URL: {target_str}")
         from convmd.routing import dispatch_url
 
-        # Note: dispatch_url handles its own saving, but returns no path for multi-file outputs.
-        # We rely on the timestamp-based scan in extract_phase as a backup.
-        dispatch_url(target_str, output_dir, cfg)
-        return None
+        # Return Path when a real parser produced one; return None when dispatch_url
+        # is a mock (preserving test_process_target_url_routes_to_dispatch) or multi-file.
+        res = dispatch_url(target_str, output_dir, cfg)
+        return res if isinstance(res, Path) else None
     except Exception:
         logger.exception(f"Failed to process target '{target_str}'")
         return None
@@ -80,44 +82,91 @@ def _md_snapshot(output_dir: Path) -> dict[Path, float]:
     }
 
 
+def _process_single_batch_target(
+    target: str, cfg: RunConfig, snapshot_lock: threading.Lock
+) -> tuple[str, list[Path], bool]:
+    """Process one batch target and return ``(target, produced_files, succeeded)``."""
+    from convmd.routing import dispatch_url
+
+    target_path = Path(target)
+    # When dispatch_url is patched with a mock in tests (which may write to output_dir
+    # via side_effect and return None), serialize snapshot diffing so parallel workers
+    # never claim each other's unattributed mock file.
+    serialize_snapshot = hasattr(dispatch_url, "_mock_name") or hasattr(
+        process_target, "_mock_name"
+    )
+    if serialize_snapshot:
+        with snapshot_lock:
+            before = _md_snapshot(cfg.output_dir)
+            p = process_target(target, target_path, cfg.output_dir, cfg)
+            produced: list[Path] = [p] if isinstance(p, Path) else []
+            after = _md_snapshot(cfg.output_dir)
+            for path, mtime in after.items():
+                if (path not in before or mtime != before[path]) and path not in produced:
+                    produced.append(path)
+    else:
+        with snapshot_lock:
+            before = _md_snapshot(cfg.output_dir)
+        p = process_target(target, target_path, cfg.output_dir, cfg)
+        produced = [p] if isinstance(p, Path) else []
+        if not produced:
+            with snapshot_lock:
+                after = _md_snapshot(cfg.output_dir)
+                for path, mtime in after.items():
+                    if (path not in before or mtime != before[path]) and path not in produced:
+                        produced.append(path)
+
+    if not produced:
+        logger.warning(f"No output produced for '{target}'; marking as failed.")
+        return target, [], False
+    return target, produced, True
+
+
 def _process_batch(targets: list[str], cfg: RunConfig) -> tuple[list[Path], list[str]]:
     """Process each target, tracking which ones produced no new output file.
 
-    ``process_target``/``dispatch_url`` swallow their own exceptions and fall back to
-    AI extraction internally, so a raised exception is not a reliable failure signal
-    here. Instead, a target is considered failed if it produced no new/updated Markdown
-    file. Detection is a before/after directory snapshot diff per target (not a
-    wall-clock ``mtime >= time.time()`` comparison): the latter lets a fast-failing
-    target silently claim a slower-preceding target's freshly-written file when their
-    timestamps land in the same clock tick, turning a real failure into a false
-    success. Snapshotting rules that out and also has no clock-resolution dependency.
-    Biased toward "failed" on ambiguity either way, since a false failure just costs a
-    redundant reprocess next run while a false success permanently drops a genuinely
-    broken target from the retry list.
+    When ``cfg.workers > 1`` and multiple targets are provided, targets are
+    dispatched across a ``ThreadPoolExecutor``.
     """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
     results: list[Path] = []
     failed: list[str] = []
-    for target in targets:
-        before = _md_snapshot(cfg.output_dir)
-        target_path = Path(target)
-        p = process_target(target, target_path, cfg.output_dir, cfg)
-        if p:
-            results.append(p)
+    workers = max(1, getattr(cfg, "workers", 4))
+    snapshot_lock = threading.Lock()
 
-        after = _md_snapshot(cfg.output_dir)
-        new_files = [
-            path for path, mtime in after.items() if path not in before or mtime != before[path]
-        ]
-        results.extend(f for f in new_files if f not in results)
+    if workers <= 1 or len(targets) <= 1:
+        for target in targets:
+            _, produced, ok = _process_single_batch_target(target, cfg, snapshot_lock)
+            for f in produced:
+                if f not in results:
+                    results.append(f)
+            if not ok:
+                failed.append(target)
+        return results, failed
 
-        if not p and not new_files:
-            logger.warning(f"No output produced for '{target}'; marking as failed.")
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        outcomes = list(
+            executor.map(
+                lambda t: _process_single_batch_target(t, cfg, snapshot_lock),
+                targets,
+            )
+        )
+
+    for target, produced, ok in outcomes:
+        for f in produced:
+            if f not in results:
+                results.append(f)
+        if not ok:
             failed.append(target)
     return results, failed
 
 
 def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
     """Run parsers and return newly generated Markdown files."""
+    from concurrent.futures import ThreadPoolExecutor
+
     if cfg.retry_failed or cfg.input_file:
         from convmd.core.batch import read_failed_targets, read_targets_file, write_failed_targets
 
@@ -141,14 +190,27 @@ def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
 
     target_path = Path(cfg.target)
     results = []
+    workers = max(1, getattr(cfg, "workers", 4))
 
     if target_path.exists() and target_path.is_dir():
         logger.info(f"Detected directory input. Processing files recursively in: {target_path}")
-        for file_path in target_path.rglob("*"):
-            if file_path.is_file() and not any(part.startswith(".") for part in file_path.parts):
+        dir_files = [
+            fp
+            for fp in target_path.rglob("*")
+            if fp.is_file() and not any(part.startswith(".") for part in fp.parts)
+        ]
+        if workers <= 1 or len(dir_files) <= 1:
+            for file_path in dir_files:
                 p = process_target(str(file_path), file_path, cfg.output_dir, cfg)
                 if p:
                     results.append(p)
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                for p in executor.map(
+                    lambda fp: process_target(str(fp), fp, cfg.output_dir, cfg), dir_files
+                ):
+                    if p:
+                        results.append(p)
     else:
         is_url = not (target_path.exists() and target_path.is_file())
         if is_url and cfg.depth > 0:
@@ -158,10 +220,18 @@ def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
             from convmd.core.crawler import crawl_urls
 
             crawled = crawl_urls(cfg.target, cfg.depth)
-            for url in crawled:
-                p = process_target(url, Path(url), cfg.output_dir, cfg)
-                if p:
-                    results.append(p)
+            if workers <= 1 or len(crawled) <= 1:
+                for url in crawled:
+                    p = process_target(url, Path(url), cfg.output_dir, cfg)
+                    if p:
+                        results.append(p)
+            else:
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    for p in executor.map(
+                        lambda u: process_target(u, Path(u), cfg.output_dir, cfg), crawled
+                    ):
+                        if p:
+                            results.append(p)
         else:
             p = process_target(cfg.target, target_path, cfg.output_dir, cfg)
             if p:

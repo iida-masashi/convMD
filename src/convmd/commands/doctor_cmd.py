@@ -25,6 +25,7 @@ _OPTIONAL_EXTRAS = [
     ("notebooklm_py", "notebooklm", "NotebookLM upload (--notebooklm)"),
     ("PIL", "image", "image handling"),
     ("yt_dlp", "scripts", "YouTube subtitle scripts"),
+    ("mcp", "mcp", "MCP server (convmd mcp)"),
 ]
 
 

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # convMD passes no tools, so AFC is unused; disabling it also silences google-genai's
 # per-call "Direct use of automatic function calling" warning (>=2.28).
 NO_AFC = types.AutomaticFunctionCallingConfig(disable=True)
+LOW_THINKING = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
 
 
 def get_api_key() -> str | None:
@@ -99,16 +100,29 @@ def reset_usage() -> None:
     _tracker.by_model.clear()
 
 
-def generate_text(prompt: str, *, model: str = Models.GEMINI_PRO) -> str | None:
+def generate_text(
+    prompt: str,
+    *,
+    model: str = Models.GEMINI_PRO,
+    thinking_level: types.ThinkingLevel | None = None,
+) -> str | None:
     """Send a prompt to Gemini and return the cleaned text, or None on failure."""
     client = get_client()
     if client is None:
         return None
     try:
+        thinking_cfg = (
+            types.ThinkingConfig(thinking_level=thinking_level)
+            if thinking_level is not None
+            else (LOW_THINKING if model == Models.GEMINI_FLASH else None)
+        )
         response = client.models.generate_content(
             model=model,
             contents=prompt,
-            config=types.GenerateContentConfig(automatic_function_calling=NO_AFC),
+            config=types.GenerateContentConfig(
+                automatic_function_calling=NO_AFC,
+                thinking_config=thinking_cfg,
+            ),
         )
         _tracker.record(model, response)
         raw = response.text if response.text else ""
@@ -138,10 +152,47 @@ def transcribe_image(
         response = client.models.generate_content(
             model=model,
             contents=[prompt or default_prompt, img],
-            config=types.GenerateContentConfig(automatic_function_calling=NO_AFC),
+            config=types.GenerateContentConfig(
+                automatic_function_calling=NO_AFC,
+                thinking_config=LOW_THINKING,
+            ),
         )
         _tracker.record(model, response)
         return response.text.strip() if response.text else ""
     except Exception as e:
         logger.error(f"Gemini image transcription failed for {image_path.name}: {e}")
+        return ""
+
+
+def transcribe_pdf(
+    pdf_path: Path,
+    prompt: str | None = None,
+    *,
+    model: str = Models.GEMINI_FLASH,
+) -> str:
+    """Run multimodal PDF transcription via Gemini native PDF input. Returns empty string on failure."""
+    client = get_client()
+    if client is None:
+        return ""
+    try:
+        pdf_bytes = pdf_path.read_bytes()
+        default_prompt = (
+            "このPDFドキュメントの内容を正確にMarkdown形式で文字起こししてください。"
+            "見出し、段落、表（Markdownテーブル）、箇条書きの構造を再現し、"
+            "余計な挨拶や解説文は一切出力せず、本文のみを出力してください。"
+        )
+        pdf_part = types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
+        response = client.models.generate_content(
+            model=model,
+            contents=[pdf_part, prompt or default_prompt],
+            config=types.GenerateContentConfig(
+                automatic_function_calling=NO_AFC,
+                thinking_config=LOW_THINKING,
+            ),
+        )
+        _tracker.record(model, response)
+        raw = response.text if response.text else ""
+        return strip_code_fence(raw)
+    except Exception as e:
+        logger.error(f"Gemini PDF transcription failed for {pdf_path.name}: {e}")
         return ""

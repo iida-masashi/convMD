@@ -73,48 +73,89 @@ def fetch_html(url: str, render_js: bool = False) -> str | None:
 _IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 
 
-def process_images(md_content: str, base_url: str, output_dir: Path) -> str:
+def _prepare_image_target(
+    raw_url: str, base_url: str, image_dir: Path
+) -> tuple[str, str, Path, str] | None:
+    """Resolve a Markdown image URL to ``(resolved_url, filename, local_path, safe_url)``."""
+    if raw_url.startswith("data:"):
+        return None
+    img_url = raw_url if raw_url.startswith("http") else urljoin(base_url, raw_url)
+    parsed_url = urlparse(img_url)
+    filename = Path(urllib.parse.unquote(parsed_url.path)).name
+    if not filename or "." not in filename:
+        filename = f"image_{hash(img_url) % 100000000:08d}.jpg"
+    filename = re.sub(r'[\\/*?:"<>|]', "", filename)
+    local_img_path = image_dir / filename
+    unquoted_path = urllib.parse.unquote(parsed_url.path)
+    encoded_path = urllib.parse.quote(unquoted_path)
+    safe_img_url = parsed_url._replace(path=encoded_path).geturl()
+    return img_url, filename, local_img_path, safe_img_url
+
+
+def _download_single_image(img_url: str, safe_img_url: str, local_img_path: Path) -> bool:
+    if local_img_path.exists():
+        return True
+    try:
+        with httpx.Client(
+            follow_redirects=True,
+            timeout=DOWNLOAD_TIMEOUT,
+            verify=_verify_default(),
+        ) as client:
+            response = client.get(safe_img_url, headers={"User-Agent": USER_AGENT})
+            response.raise_for_status()
+            local_img_path.write_bytes(response.content)
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to download image {img_url}: {e}")
+        return False
+
+
+def process_images(
+    md_content: str, base_url: str, output_dir: Path, *, max_workers: int = 4
+) -> str:
     """Replace remote Markdown image URLs with local downloads under ``output_dir/images``."""
+    from concurrent.futures import ThreadPoolExecutor
+
     image_dir = output_dir / "images"
     image_dir.mkdir(parents=True, exist_ok=True)
 
-    def replace_img(match: re.Match) -> str:
+    # Deduplicate image targets across the document
+    targets: dict[str, tuple[str, str, Path, str]] = {}
+    for match in _IMG_PATTERN.finditer(md_content):
+        raw_url = match.group(2)
+        if raw_url not in targets:
+            try:
+                prepared = _prepare_image_target(raw_url, base_url, image_dir)
+                if prepared is not None:
+                    targets[raw_url] = prepared
+            except Exception as e:
+                logger.warning(f"Failed to download image {raw_url}: {e}")
+
+    status_by_raw_url: dict[str, str] = {}
+    items = list(targets.items())
+    if len(items) <= 1 or max_workers <= 1:
+        for raw_url, (img_url, filename, local_path, safe_url) in items:
+            if _download_single_image(img_url, safe_url, local_path):
+                status_by_raw_url[raw_url] = filename
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                raw_url: (
+                    filename,
+                    executor.submit(_download_single_image, img_url, safe_url, local_path),
+                )
+                for raw_url, (img_url, filename, local_path, safe_url) in items
+            }
+            for raw_url, (filename, fut) in futures.items():
+                if fut.result():
+                    status_by_raw_url[raw_url] = filename
+
+    def replace_img(match: re.Match[str]) -> str:
         alt_text = match.group(1)
-        img_url = match.group(2)
-
-        if img_url.startswith("data:"):
-            return str(match.group(0))
-
-        if not img_url.startswith("http"):
-            img_url = urljoin(base_url, img_url)
-
-        try:
-            parsed_url = urlparse(img_url)
-            filename = Path(urllib.parse.unquote(parsed_url.path)).name
-            if not filename or "." not in filename:
-                filename = f"image_{hash(img_url) % 100000000:08d}.jpg"
-
-            filename = re.sub(r'[\\/*?:"<>|]', "", filename)
-            local_img_path = image_dir / filename
-
-            unquoted_path = urllib.parse.unquote(parsed_url.path)
-            encoded_path = urllib.parse.quote(unquoted_path)
-            safe_img_url = parsed_url._replace(path=encoded_path).geturl()
-
-            if not local_img_path.exists():
-                with httpx.Client(
-                    follow_redirects=True,
-                    timeout=DOWNLOAD_TIMEOUT,
-                    verify=_verify_default(),
-                ) as client:
-                    response = client.get(safe_img_url, headers={"User-Agent": USER_AGENT})
-                    response.raise_for_status()
-                    local_img_path.write_bytes(response.content)
-
+        raw_url = match.group(2)
+        filename = status_by_raw_url.get(raw_url)
+        if filename is not None:
             return f"![{alt_text}](images/{filename})"
-
-        except Exception as e:
-            logger.warning(f"Failed to download image {img_url}: {e}")
-            return str(match.group(0))
+        return str(match.group(0))
 
     return _IMG_PATTERN.sub(replace_img, md_content)

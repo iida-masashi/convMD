@@ -103,10 +103,25 @@ def _maybe_run_doctor_subcommand() -> bool:
     return False
 
 
+def _maybe_run_mcp_subcommand() -> bool:
+    """If the user invoked ``convmd mcp``, handle it and return True."""
+    if len(sys.argv) > 1 and sys.argv[1] == "mcp":
+        from convmd.cli_args import build_mcp_parser
+        from convmd.commands.mcp_cmd import run_mcp
+
+        mcp_parser = build_mcp_parser()
+        mcp_args = mcp_parser.parse_args(sys.argv[2:])
+        run_mcp(mcp_args)
+        return True
+    return False
+
+
 def main() -> None:
     if _maybe_run_find_subcommand():
         return
     if _maybe_run_doctor_subcommand():
+        return
+    if _maybe_run_mcp_subcommand():
         return
 
     parser = build_parser()

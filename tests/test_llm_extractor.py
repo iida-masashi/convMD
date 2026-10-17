@@ -64,7 +64,7 @@ def test_extract_with_llm_custom_schema_skips_response_schema(mock_get_client, t
 
     mock_response = MagicMock()
     mock_response.text = (
-        '{"title": "Custom", "content_markdown": "Body.", "tags": [], "extra_field": "value"}'
+        '{"title": "Custom", "content_markdown": "Body.", "tags": [], "extra_field": "custom_val"}'
     )
     mock_client.models.generate_content.return_value = mock_response
 
@@ -74,6 +74,9 @@ def test_extract_with_llm_custom_schema_skips_response_schema(mock_get_client, t
     call_kwargs = mock_client.models.generate_content.call_args.kwargs
     assert call_kwargs["config"].response_schema is None
     assert "extra_field" in call_kwargs["config"].system_instruction
+    assert call_kwargs["config"].thinking_config is not None
+    content = result_path.read_text(encoding="utf-8")
+    assert 'extra_field: "custom_val"' in content
 
 
 @patch("convmd.core.gemini.get_client")

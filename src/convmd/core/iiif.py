@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -29,6 +31,7 @@ def process_iiif_manifest(
     ocr_prompt: str | None = None,
     *,
     secondary_prompt: str | None = None,
+    max_workers: int = 4,
 ) -> str:
     """Download all canvas images from a IIIF manifest and return Markdown.
 
@@ -36,7 +39,6 @@ def process_iiif_manifest(
     is also transcribed. When ``secondary_prompt`` is given (e.g. modern-language
     translation), it is appended as a second blockquote after the OCR result.
     """
-    images_markdown = ""
     try:
         res = httpx.get(manifest_url, timeout=DEFAULT_TIMEOUT)
         res.raise_for_status()
@@ -50,37 +52,46 @@ def process_iiif_manifest(
         return ""
 
     image_dir.mkdir(parents=True, exist_ok=True)
-    canvases = sequences[0].get("canvases", [])
+    canvases: list[dict[str, Any]] = sequences[0].get("canvases", [])
     logger.info(f"Found {len(canvases)} images in IIIF manifest.")
 
     do_ocr = gemini.is_configured()
     do_secondary = do_ocr and secondary_prompt is not None
 
-    for i, canvas in enumerate(canvases):
+    def _process_canvas(item: tuple[int, dict[str, Any]]) -> str:
+        i, canvas = item
+        chunk = ""
         try:
             images = canvas.get("images", [])
             if not images:
-                continue
+                return ""
 
             full_img_url = images[0]["resource"]["@id"]
             img_filename = f"page_{i + 1:04d}.jpg"
             img_path = image_dir / img_filename
             download_image(full_img_url, img_path)
 
-            images_markdown += f"![[images/{img_filename}]]\n"
+            chunk += f"![[images/{img_filename}]]\n"
 
             if do_ocr:
                 transcription = transcribe_image_with_gemini(img_path, prompt=ocr_prompt)
                 if transcription:
-                    images_markdown += "\n> " + transcription.replace("\n", "\n> ") + "\n\n"
+                    chunk += "\n> " + transcription.replace("\n", "\n> ") + "\n\n"
                     if do_secondary and secondary_prompt is not None:
                         secondary = gemini.generate_text(
                             f"{secondary_prompt}\n\n{transcription}"
                         )
                         if secondary:
-                            images_markdown += "> " + secondary.replace("\n", "\n> ") + "\n\n"
-
+                            chunk += "> " + secondary.replace("\n", "\n> ") + "\n\n"
         except Exception as e:
             logger.warning(f"Failed to process image {i + 1}: {e}")
+        return chunk
 
-    return images_markdown
+    indexed_canvases = list(enumerate(canvases))
+    if len(indexed_canvases) <= 1 or max_workers <= 1:
+        parts = [_process_canvas(item) for item in indexed_canvases]
+    else:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            parts = list(executor.map(_process_canvas, indexed_canvases))
+
+    return "".join(parts)

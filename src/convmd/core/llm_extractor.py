@@ -8,7 +8,7 @@ import re
 import unicodedata
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from convmd.constants import Models
 from convmd.core import gemini
@@ -71,6 +71,8 @@ def find_unverified_numbers(markdown: str, source: str) -> list[str]:
 
 
 class _ExtractedContent(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     title: str | None = None
     author: str | None = None
     date: str | None = None
@@ -139,6 +141,7 @@ def extract_with_llm(
             response_schema=None if schema else _ExtractedContent,
             temperature=1.0,
             automatic_function_calling=gemini.NO_AFC,
+            thinking_config=gemini.LOW_THINKING if model == Models.GEMINI_FLASH else None,
         )
 
         response = client.models.generate_content(model=model, contents=html_or_text, config=config)
@@ -176,6 +179,10 @@ def extract_with_llm(
             extra["author"] = author
         if date:
             extra["date"] = date
+        if parsed.model_extra:
+            for key, value in parsed.model_extra.items():
+                if value is not None and key not in extra:
+                    extra[key] = value
 
         frontmatter = generate_frontmatter(
             title=title,

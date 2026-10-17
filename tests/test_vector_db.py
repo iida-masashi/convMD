@@ -44,6 +44,25 @@ def test_embedding_function_success():
         assert result == [[0.1, 0.2, 0.3]]
 
 
+def test_embedding_function_batches_multiple_texts_in_single_call():
+    e1 = MagicMock(values=[0.1, 0.2])
+    e2 = MagicMock(values=[0.3, 0.4])
+    e3 = MagicMock(values=[0.5, 0.6])
+    mock_response = MagicMock(embeddings=[e1, e2, e3])
+
+    mock_client = MagicMock()
+    mock_client.models.embed_content.return_value = mock_response
+
+    with patch("convmd.core.vector_db.get_client", return_value=mock_client):
+        fn = GeminiEmbeddingFunction()
+        result = [list(v) for v in fn(["a", "b", "c"])]
+        assert result == [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
+        mock_client.models.embed_content.assert_called_once_with(
+            model="gemini-embedding-2",
+            contents=["a", "b", "c"],
+        )
+
+
 def test_embedding_function_handles_exception():
     mock_client = MagicMock()
     mock_client.models.embed_content.side_effect = RuntimeError("boom")

@@ -106,11 +106,13 @@ def convert_office_file(
     output_dir: Path,
     *,
     ai_extract: bool = False,
+    ocr: bool = False,
     schema: str | None = None,
 ) -> Path | None:
     """
     Converts local Office files (PPTX, XLSX, DOCX, PDF, etc.) to Markdown
-    using anydoc (falling back to MarkItDown when unsupported).
+    using anydoc (falling back to MarkItDown when unsupported, and Gemini
+    multimodal PDF transcription when ``ocr`` or ``ai_extract`` is enabled).
     """
     logger.info(f"Attempting to convert {file_path}...")
 
@@ -120,6 +122,19 @@ def convert_office_file(
 
     try:
         md_content = _convert_to_markdown_text(file_path)
+        used_pdf_ocr = False
+        if md_content is None and file_path.suffix.lower() == ".pdf" and (ocr or ai_extract):
+            from convmd.core import gemini
+
+            if gemini.is_configured():
+                logger.info(
+                    f"Falling back to Gemini multimodal PDF transcription for {file_path.name}..."
+                )
+                ocr_text = gemini.transcribe_pdf(file_path)
+                if ocr_text.strip():
+                    md_content = ocr_text
+                    used_pdf_ocr = True
+
         if md_content is None:
             # _convert_to_markdown_text already logged the reason (garbled output
             # from every available engine, likely a broken embedded-font ToUnicode map).
@@ -140,8 +155,11 @@ def convert_office_file(
         filename = f"{safe_title}.md"
         out_path = output_dir / filename
 
+        tags = ["local_file", "office"]
+        if used_pdf_ocr:
+            tags.append("ocr")
         frontmatter = generate_frontmatter(
-            title=file_path.name, url=str(file_path.resolve()), tags=["local_file", "office"]
+            title=file_path.name, url=str(file_path.resolve()), tags=tags
         )
 
         out_path.write_text(frontmatter + md_content, encoding="utf-8")

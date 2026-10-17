@@ -255,6 +255,7 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
                 local,
                 out,
                 ai_extract=cfg.ai_extract if cfg else False,
+                ocr=cfg.ocr if cfg else False,
                 schema=cfg.schema if cfg else None,
             )
 
@@ -281,7 +282,7 @@ def _routes() -> list[tuple[Predicate, Handler]]:
     return _routes_cache
 
 
-def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None) -> None:
+def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None) -> Path | None:
     """Dispatch a URL to the first matching parser."""
     if cfg is None:
         cfg = RunConfig(target=target_url, output_dir=output_dir)
@@ -296,8 +297,8 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
 
         html = get_html(target_url)
         if html:
-            extract_with_llm(html, output_dir, url=target_url, schema=cfg.schema)
-            return
+            return extract_with_llm(html, output_dir, url=target_url, schema=cfg.schema)
+        return None
 
     parsed = urlparse(target_url)
     is_binary = _is_binary_url(target_url) or _is_edinet_target(target_url)
@@ -318,13 +319,15 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
 
                     html = get_html(target_url, render_js=getattr(cfg, "render_js", False))
                     if html:
-                        extract_with_llm(html, output_dir, url=target_url, schema=getattr(cfg, "schema", None))
+                        return extract_with_llm(html, output_dir, url=target_url, schema=getattr(cfg, "schema", None))
+
+                return res_path
 
             except Exception:
                 logger.exception(f"Handler failed for {target_url}")
                 if is_binary:
                     # Same reason: don't feed decoded binary to the LLM.
-                    return
+                    return None
                 # Fallback to AI extraction on failure
                 from convmd.core.http import get_html
                 from convmd.core.llm_extractor import extract_with_llm
@@ -332,6 +335,7 @@ def dispatch_url(target_url: str, output_dir: Path, cfg: RunConfig | None = None
                 html = get_html(target_url, render_js=getattr(cfg, "render_js", False))
                 if html:
                     logger.info(f"Retrying {target_url} with AI autonomous extraction...")
-                    extract_with_llm(html, output_dir, url=target_url, schema=getattr(cfg, "schema", None))
-            return
+                    return extract_with_llm(html, output_dir, url=target_url, schema=getattr(cfg, "schema", None))
+            return None
     logger.error(f"No route matched for {target_url}")
+    return None
