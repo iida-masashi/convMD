@@ -75,6 +75,21 @@ cd convMD
 uv sync
 ```
 
+### AI エージェント（Claude Code / Gemini CLI）のスキルとして登録する場合
+
+本リポジトリにはルート直下に [SKILL.md](SKILL.md) が同梱されているため、スキルのディレクトリへクローンまたはシンボリックリンク（Windows はジャンクション）を張るだけで、AI エージェントから `convmd` スキルとしてそのまま呼び出せます。
+
+```bash
+# macOS / Linux の場合（シンボリックリンク）
+ln -s "$(pwd)" ~/.claude/skills/convmd
+ln -s "$(pwd)" ~/.gemini/skills/convmd
+```
+```powershell
+# Windows PowerShell の場合（ジャンクション）
+cmd /c mklink /J "$HOME\.claude\skills\convmd" (Get-Location).Path
+cmd /c mklink /J "$HOME\.gemini\skills\convmd" (Get-Location).Path
+```
+
 ### オプション機能のインストール
 
 デフォルトの `uv sync` はコア機能（Web/SNS変換・画像埋め込み・全文検索など）のみを導入します。以下の機能は追加インストールが必要です。
