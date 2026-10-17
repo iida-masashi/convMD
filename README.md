@@ -36,24 +36,26 @@ URLやファイルパスを引数に渡すだけで、システムが自動的�
 - **ローカル音声/動画ファイル (`.mp3`, `.m4a`, `.mp4` など)**: `faster-whisper` を用いたオフラインでの高精度な自動文字起こし（※要FFmpeg）。
 
 ### 📄 ローカルファイル・汎用抽出
-- **Office / PDF文書**: `anydoc`（Firecrawl社製、Rust製で高速・高品質）を優先的に利用し、非対応の場合（スキャンPDF等）は Microsoft `markitdown` エンジンにフォールバックして PowerPoint, Excel, Word 等からのテキスト・Markdown抽出を行う。なお、後述のWeb抽出フォールバック「Firecrawl」（クロール/スクレイピングAPI）とは別のライブラリ。`anydoc` は 0.1 系に固定している（0.2 系は和暦書式 `[$-411]ge.m.d` の Excel 日付セルをシリアル値（例: `19682`）で出力するため）。`markitdown` も 0.1.5 に固定している（0.1.6 以降は縦書きPDFの読み順が崩れるため）。
-- **一般的なWebサイト**: `Readability` 相当のアルゴリズムを用いた、汎用的なニュース・ブログの本文抽出。
+- **Office / PDF文書**: `anydoc`（Firecrawl社製、Rust製で高速・高品質）を優先的に利用し、非対応の場合（スキャンPDF等）は Microsoft `markitdown` エンジンにフォールバックして PowerPoint, Excel, Word 等からのテキスト・Markdown抽出を行う。さらに PDF で抽出テキストが空（スキャン画像PDF）または文字化け（フォント埋め込み不備）と判定された場合、`--ocr` または `--ai-extract` 指定時は **Gemini 3 Native PDF マルチモーダル**（20MB以下はインライン送信、20MB超は Files API 自動アップロード）へ自動フォールバックし、段組・表・図表を含むページ全体を直接 Markdown 化する。なお、後述のWeb抽出フォールバック「Firecrawl」（クロール/スクレイピングAPI）とは別のライブラリ。`anydoc` は 0.1 系に固定している（0.2 系は和暦書式 `[$-411]ge.m.d` の Excel 日付セルをシリアル値（例: `19682`）で出力するため）。`markitdown` も 0.1.5 に固定している（0.1.6 以降は縦書きPDFの読み順が崩れるため）。
+- **一般的なWebサイト**: HTTPリクエスト時に `Accept: text/markdown` Content Negotiation を行い、サーバー（Cloudflare Markdown for Agents 対応サイト等）が直接 Markdown を返す場合は HTML パースを介さずネイティブ取得する。HTML の場合は **[trafilatura](https://trafilatura.readthedocs.io/)** を第1抽出エンジンとして使用し（失敗時は `readability-lxml` + `markdownify` に自動フォールバック）、表・コードブロック・リンク構造を保ったクリーンな本文抽出を行う。
 
 ### ✨ ハイブリッド自律抽出エンジン (Hybrid Extraction)
-- **Tier 1 (Static)**: `Readability` や専用パーサーによる高速・低コストな抽出。
-- **Tier 2 (AI-Driven)**: 既存の解析が失敗した場合や、`--ai-extract` 指定時に、Gemini 3 がDOM構造を自律的に解析して Markdown 化します（本質的なコンテンツの抽出、メタデータの自動付与）。
+- **Tier 1 (Static)**: `Accept: text/markdown` ネゴシエーション、`trafilatura`、`Readability`、および専用パーサーによる高速・低コストな抽出。
+- **Tier 2 (AI-Driven)**: 既存の解析が失敗した場合や、`--ai-extract` 指定時に、Gemini 3 がDOM構造を自律的に解析して Markdown 化します（本質的なコンテンツの抽出、メタデータの自動付与）。OCR・タグ抽出・DOM抽出などの定型Flashタスクには `ThinkingConfig(thinking_level="LOW")` を適用し、推論トークンコストと応答レイテンシを最小化しています。
 - **AI抽出の数値照合**: AI抽出したファイルには frontmatter に `extraction: "ai"` が付きます。本文中の3桁以上の数値が元ページに見つからない場合（AIの計算・単位換算・誤り）は `unverified_numbers` に列挙し、本文冒頭に CAUTION を表示します。桁区切りカンマと全角数字の違いは同一視します。
 - **空抽出の検知**: frontmatter を除いた本文が100文字未満の結果は失敗とみなし、AI抽出へ自動で切り替えます。
-- **カスタムスキーマ**: `--schema` オプションに JSON 形式で抽出したい項目を指定することで、特定の情報を構造化データとして引き出すことが可能です。
+- **カスタムスキーマ**: `--schema` オプションに JSON 形式で抽出したい項目を指定することで、特定の情報を構造化データとして引き出すことが可能です（抽出されたカスタム項目は YAML frontmatter の `extra:` に出力されます）。
 - **トランスフォーム**: 生成されたMarkdownファイルに対して、`--transform` オプションで任意の指示（例：「現代語訳して」「要約して」）を与え、Gemini API を使って内容を自動変換できます。
 - `--auto-link` で重要キーワードを Obsidian の内部リンク `[[ ]]` に自動変換、`--summary` で複数ファイル横断のエグゼクティブサマリーを生成。
 
-### 🔁 差分追跡・コスト可視化・全文検索 (Phase 3)
+### 🔁 差分追跡・コスト可視化・全文検索・並列実行・MCPサーバー
 - HTTP取得は一時的なエラー（タイムアウト・接続エラー・429/5xx）を自動的にリトライ（指数バックオフ、最大3回再試行）。永続的なエラー（404等）は即座に失敗として扱われます。
+- `--workers <N>`（既定 `4`）により、バッチ処理（`--input-file`）・ディレクトリ一括変換・同一ドメインクロール・記事内インライン画像ダウンロード・IIIF 連番画像ダウンロード＆OCR をマルチスレッドで並列実行します。
 - 出力ディレクトリ配下に SQLite (`.convmd.db`) を持ち、URL ごとの本文ハッシュをキャッシュ。同一 URL を再取得した際に内容が変わっていなければスキップ。
 - `--diff-only` 指定時は、変化があった場合のみ `*_diff.md` を別途生成（unified diff 形式）。
 - 実行末尾に Gemini API のトークン使用量と概算コストを表示（`--no-cost` で抑止可）。
-- `convmd find "<キーワード>"` で既存の出力フォルダ配下を全文検索（ripgrep があれば自動使用）。
+- `convmd find "<キーワード>"` で既存の出力フォルダ配下を全文検索（ripgrep があれば自動使用）。`--semantic` 指定時は ChromaDB + Gemini Embedding（最大100チャンク単位のバッチリクエスト対応）で意味検索を実行。
+- `convmd mcp` で **Model Context Protocol (MCP) サーバー**を起動し、Claude Desktop・Cursor・Antigravity 等のAIエージェントに `convert_target` / `search_markdown` ツールを公開。
 - `convmd doctor` で環境診断（pandoc/ffmpeg の有無、Gemini APIキー、オプション依存関係、設定ファイルなど）を実行。
 - `--input-file <path>` で複数URL/ファイルパスを一括処理し、失敗したものだけ `--retry-failed` で再試行。
 
@@ -101,6 +103,7 @@ cmd /c mklink /J "$HOME\.gemini\skills\convmd" (Get-Location).Path
 | Firecrawlフォールバック（Playwright/browser4-cli失敗時の最終手段） | `uv sync --extra firecrawl` | `FIRECRAWL_API_KEY` の設定が必要（課金あり） |
 | NotebookLM連携 | `uv sync --extra notebooklm` | 別途ブラウザCookie認証が必要（`notebooklm login --browser-cookies chrome`） |
 | Gemini画像OCR | `uv sync --extra image` | |
+| MCP サーバー（`convmd mcp`） | `uv sync --extra mcp` | Claude Desktop / Cursor / Antigravity 等から MCP ツールとして呼び出し可能 |
 | `scripts/` 内の補助スクリプト（YouTube字幕取得等） | `uv sync --extra scripts` | パッケージ本体（CLI）は利用不可、`scripts/*.py` 単体で実行 |
 | 全部まとめて | `uv sync --extra all` | |
 
@@ -241,7 +244,7 @@ uv run python -m convmd.cli find "阿波説に関する記述" --semantic --doma
 ```
 
 ### 環境診断 (`convmd doctor`)
-Python バージョン、`pandoc` / `ffmpeg` の PATH 有無、Gemini APIキーの設定状況、`faster-whisper` / `playwright` / `notebooklm-py` / `pillow` / `yt-dlp` などオプション依存関係のインストール状況、`playwright` を入れている場合はブラウザバイナリ（`playwright install`）の有無、`.convmd.yaml` の存在とキー内容（`obsidian_vault` が設定されている場合は `--output-dir` との優先順位の注意も表示）、`CONVMD_OUTPUT_DIR` 環境変数の設定状況をまとめて確認できます。
+Python バージョン、`pandoc` / `ffmpeg` の PATH 有無、Gemini APIキーの設定状況、`faster-whisper` / `playwright` / `notebooklm-py` / `pillow` / `yt-dlp` / `mcp` などオプション依存関係のインストール状況、`playwright` を入れている場合はブラウザバイナリ（`playwright install`）の有無、`.convmd.yaml` の存在とキー内容（`obsidian_vault` が設定されている場合は `--output-dir` との優先順位の注意も表示）、`CONVMD_OUTPUT_DIR` 環境変数の設定状況をまとめて確認できます。
 
 ```bash
 uv run python -m convmd.cli doctor
@@ -249,12 +252,34 @@ uv run python -m convmd.cli doctor
 
 各行は `[OK]` / `[WARN]` / `[FAIL]` / `[MISSING]` のいずれかで始まります（`[MISSING]` は必須ではない任意機能が未設定なだけで、必ずしも問題ではありません）。診断ツールのため、問題があっても終了コードは 0 のままです。
 
-### バッチ処理と失敗リトライ (`--input-file` / `--retry-failed`)
-複数の URL・ファイルパスを 1 行 1 件のテキストファイルにまとめて一括処理できます（`#` で始まる行・空行は無視）。
+### MCP サーバーモード (`convmd mcp`)
+`uv sync --extra mcp` を導入すると、`convMD` を **Model Context Protocol (MCP) サーバー**として起動できます。Claude Desktop・Cursor・Antigravity などのAIエージェントから以下の2つのツールを直接呼び出せます。
+- `convert_target`: URL またはローカルファイルを Markdown に変換し、生成された本文を返却します（`ocr`, `ai_extract`, `render_js`, `transform`, `output_dir` 指定可）。
+- `search_markdown`: 変換済みの Markdown 群に対して全文検索（ripgrep / Python）またはセマンティック検索（`semantic=True`）を実行します。
 
 ```bash
-# urls.txt: 1行1URL、#はコメント
-uv run python -m convmd.cli --input-file urls.txt --output-dir ./output
+# stdio トランスポート（既定）で MCP サーバーを起動
+uv run python -m convmd.cli mcp
+```
+
+Claude Desktop 等の `mcpServers` 設定例:
+```json
+{
+  "mcpServers": {
+    "convmd": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/convMD", "run", "convmd", "mcp"]
+    }
+  }
+}
+```
+
+### バッチ処理・並列実行と失敗リトライ (`--input-file` / `--workers` / `--retry-failed`)
+複数の URL・ファイルパスを 1 行 1 件のテキストファイルにまとめて一括処理できます（`#` で始まる行・空行は無視）。`--workers <N>`（既定 `4`）により複数ターゲットが並列に処理されます。
+
+```bash
+# urls.txt: 1行1URL、#はコメント（8ワーカーで並列取得）
+uv run python -m convmd.cli --input-file urls.txt --output-dir ./output --workers 8
 ```
 
 処理後、何も出力を生成できなかったターゲットは `<output-dir>/.convmd_failed.txt` に記録されます。次回は `--retry-failed` を指定すると、その失敗リストだけを再処理します（**同じ `--output-dir` を指定する必要があります**）。全て成功すればファイルは自動的に削除されます。
@@ -295,6 +320,7 @@ uv run python -m convmd.cli https://example.com/news --interval 30   # 30分ご�
 ```
 
 ### その他の実行オプション
+- `--workers <N>`: バッチ変換・ディレクトリ処理・インライン画像ダウンロード・IIIF連番OCRの並列ワーカー数（既定 `4`）。
 - `--open-obsidian`: 処理完了後、`--obsidian-vault` で指定したVault側のノートをOSの既定アプリ（Obsidian URIスキーム）で開きます。`--obsidian-vault` 未指定の場合は警告を表示します。
 - `--no-cache`: `.convmd.db` によるキャッシュ・差分スキップを無効化し、常に再取得・再処理します。
 - `--slack-webhook <URL>`: `--summary` で生成したエグゼクティブサマリーを、指定したSlack Incoming Webhook URLに通知します。
@@ -315,6 +341,7 @@ CLI 引数が多くなる場合、YAML ファイルにデフォルトを書い�
 ```yaml
 # ~/.convmd.yaml もしくは ./.convmd.yaml
 output_dir: ./output
+workers: 4
 auto_link: true
 normalize_tags: true
 tag_similarity_cutoff: 0.9
@@ -365,27 +392,28 @@ uv run python -m convmd.cli https://example.com/article \
 src/convmd/
 ├── cli.py            # エントリポイント（薄い）
 ├── cli_args.py       # argparse + RunConfig dataclass
-├── pipeline.py       # extract → diff → transform → link → summary → dispatch
+├── pipeline.py       # extract → diff → transform → link → summary → dispatch（並列対応）
 ├── routing.py        # URL ドメイン別の動的ディスパッチ（プラグイン追加に強い）
 ├── constants.py      # サフィックス・モデル名・タイムアウトの単一の真実
 ├── config.py         # 出力先解決（副作用なし）
 ├── exporters/        # md / json / pandoc(epub,pdf,docx,html)
-├── commands/         # find / doctor サブコマンド
+├── commands/         # find / doctor / mcp サブコマンド
 ├── core/
-│   ├── http.py         # 集中化された httpx ヘルパー（TLS設定・リトライ/バックオフ込み）
-│   ├── gemini.py        # Gemini API 集中化 + UsageTracker（コスト集計）
+│   ├── http.py         # 集中化された httpx ヘルパー（TLS設定・リトライ・Accept: text/markdown 対応）
+│   ├── gemini.py        # Gemini API 集中化（ThinkingConfig・Native PDF対応）+ UsageTracker
 │   ├── cache.py         # SQLite ベースのキャッシュ & unified diff
 │   ├── batch.py         # --input-file / --retry-failed の失敗リスト管理
 │   ├── crawler.py       # 同一ドメインBFSクローラ
-│   ├── iiif.py          # IIIF マニフェスト処理 + 任意の bilingual OCR
+│   ├── iiif.py          # IIIF マニフェスト並列ダウンロード + 任意の bilingual OCR
 │   ├── ocr.py           # OCR の薄いラッパ
-│   ├── llm_extractor.py # Gemini によるDOM自律解析（Tier 2 抽出）
-│   ├── vector_db.py     # ChromaDB + Gemini Embedding（`convmd find --semantic`）
+│   ├── llm_extractor.py # Gemini によるDOM自律解析（Tier 2 抽出 + カスタムスキーマ extra 保持）
+│   ├── vector_db.py     # ChromaDB + Gemini バッチ Embedding（`convmd find --semantic`）
 │   ├── transform.py     # transform / auto-link / summary
-│   ├── download.py      # 画像/HTML 取得の互換シム
+│   ├── download.py      # インライン画像並列取得 / HTML 取得シム
 │   └── utils.py         # フロントマター / ファイル名サニタイズ / 同名回避（unique_output_path）
 ├── parsers/          # 各プラットフォーム別のパーサ群
-│   ├── general.py / office.py
+│   ├── general.py      # trafilatura (Tier 1) + Readability フォールバック + Content Negotiation
+│   ├── office.py       # anydoc → markitdown → Gemini Native PDF 自動フォールバック
 │   ├── media/        # zenn, qiita, wikipedia, kokusho, naj, ndl, audio, hatena, substack, medium, speakerdeck, podcast, edinet
 │   └── sns/          # note, grok(X/Twitter), youtube, github, reddit, hackernews
 └── integrations/     # notebooklm / obsidian(_rest) / notion / slack / vault_tags
