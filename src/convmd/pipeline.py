@@ -51,6 +51,7 @@ def process_target(
                 ai_extract=cfg.ai_extract if cfg else False,
                 ocr=cfg.ocr if cfg else False,
                 schema=cfg.schema if cfg else None,
+                source_url=cfg.source_url if cfg else None,
             )
 
         logger.info(f"Analyzing URL: {target_str}")
@@ -163,6 +164,17 @@ def _process_batch(targets: list[str], cfg: RunConfig) -> tuple[list[Path], list
     return results, failed
 
 
+def _postprocess_outputs(files: list[Path], cfg: RunConfig) -> None:
+    """Optional origin-URL line, then the output quality gate (warnings only)."""
+    from convmd.core.quality import add_origin_line, check_output
+
+    for path in files:
+        if cfg.origin_line:
+            add_origin_line(path)
+        for problem in check_output(path):
+            logger.warning(f"Quality check: {path.name}: {problem}")
+
+
 def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
     """Run parsers and return newly generated Markdown files."""
     from concurrent.futures import ThreadPoolExecutor
@@ -186,7 +198,9 @@ def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
                 f"{len(failed)}/{len(targets)} targets failed; see "
                 f"{cfg.output_dir / '.convmd_failed.txt'} (rerun with --retry-failed)."
             )
-        return sorted({p for p in results if p.suffix.lower() == ".md"})
+        batch_md = sorted({p for p in results if p.suffix.lower() == ".md"})
+        _postprocess_outputs(batch_md, cfg)
+        return batch_md
 
     target_path = Path(cfg.target)
     results = []
@@ -246,6 +260,7 @@ def extract_phase(cfg: RunConfig, start_time: float) -> list[Path]:
 
     new_md = sorted(new_md_set)
     logger.info(f"Found {len(new_md)} generated markdown files for pipeline processing.")
+    _postprocess_outputs(new_md, cfg)
     return new_md
 
 
@@ -290,6 +305,8 @@ def summary_phase(files: list[Path], cfg: RunConfig) -> Path | None:
 
 def embed_phase(files: list[Path], cfg: RunConfig) -> None:
     """Upsert generated markdown files into ChromaDB for semantic search."""
+    if cfg.no_cache:
+        return  # --no-cache: leave no .chroma_db behind in the output directory
     valid_files = [f for f in files if f.exists() and not f.name.endswith(Suffix.DIFF)]
     if not valid_files:
         return

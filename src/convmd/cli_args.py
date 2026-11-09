@@ -42,6 +42,8 @@ class RunConfig:
     input_file: Path | None = None
     retry_failed: bool = False
     workers: int = 4
+    origin_line: bool = False
+    source_url: str | None = None
     extra: dict = field(default_factory=dict)
 
 
@@ -134,6 +136,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=4,
         help="Max concurrent workers for batch processing, image downloads, and IIIF OCR (default: 4).",
     )
+    parser.add_argument(
+        "--origin-line",
+        action="store_true",
+        help="Insert '> 原典URL: <source>' right after the frontmatter of each output, for "
+        "publishers (e.g. Quartz) that do not render the frontmatter 'source:' field.",
+    )
+    parser.add_argument(
+        "--source-url",
+        type=str,
+        default=None,
+        help="Original https URL to record as 'source:' for a local file target "
+        "(e.g. a PDF you saved by hand). Ignored for URL targets.",
+    )
+    parser.add_argument(
+        "--sec-user-agent",
+        type=str,
+        default=None,
+        help="User-Agent for sec.gov/fda.gov, which require you to identify yourself "
+        "(e.g. 'Your Name your@email'). Same as $CONVMD_SEC_USER_AGENT.",
+    )
     return parser
 
 
@@ -218,4 +240,6 @@ def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
         input_file=_typed(args, "input_file", None, Path),
         retry_failed=_typed(args, "retry_failed", False, bool),
         workers=max(1, _typed(args, "workers", 4, int)),
+        origin_line=_typed(args, "origin_line", False, bool),
+        source_url=_typed(args, "source_url", None, str),
     )

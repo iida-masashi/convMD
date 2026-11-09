@@ -284,6 +284,16 @@ def _with_sec_user_agent(url: str, headers: Mapping[str, str] | None) -> Mapping
     return {**(headers or {}), "User-Agent": ua}
 
 
+def _log_ua_hint(url: str, status: int) -> None:
+    """Explain a 403 from hosts that require a descriptive User-Agent with contact info."""
+    host = urllib.parse.urlparse(url).hostname or ""
+    if status == 403 and any(host == d or host.endswith("." + d) for d in _DESCRIPTIVE_UA_HOSTS):
+        logger.error(
+            f"{host} requires a User-Agent that identifies you (name and contact). "
+            "Set --sec-user-agent \"Your Name your@email\" or $CONVMD_SEC_USER_AGENT."
+        )
+
+
 def get_html(
     url: str,
     *,
@@ -337,6 +347,7 @@ def get_html(
         return html
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP error {e.response.status_code} for {url}")
+        _log_ua_hint(url, e.response.status_code)
         return None
     except Exception as e:
         logger.error(f"Failed to request {url}: {e}")
@@ -356,7 +367,9 @@ def download_binary(
 
     def _attempt() -> None:
         with get_client(timeout=timeout) as client:
-            with client.stream("GET", encoded_url, headers=_default_headers()) as response:
+            with client.stream(
+                "GET", encoded_url, headers=_default_headers(_with_sec_user_agent(encoded_url, None))
+            ) as response:
                 response.raise_for_status()
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with dest.open("wb") as fh:
@@ -368,6 +381,7 @@ def download_binary(
         return True
     except httpx.HTTPStatusError as e:
         logger.error(redact(f"HTTP error {e.response.status_code} downloading {url}"))
+        _log_ua_hint(url, e.response.status_code)
         return False
     except Exception as e:
         logger.error(redact(f"Failed to download {url}: {e}"))

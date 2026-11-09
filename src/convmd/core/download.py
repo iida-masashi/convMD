@@ -117,7 +117,6 @@ def process_images(
     from concurrent.futures import ThreadPoolExecutor
 
     image_dir = output_dir / "images"
-    image_dir.mkdir(parents=True, exist_ok=True)
 
     # Deduplicate image targets across the document
     targets: dict[str, tuple[str, str, Path, str]] = {}
@@ -133,6 +132,8 @@ def process_images(
 
     status_by_raw_url: dict[str, str] = {}
     items = list(targets.items())
+    if items:
+        image_dir.mkdir(parents=True, exist_ok=True)  # only when there is something to save
     if len(items) <= 1 or max_workers <= 1:
         for raw_url, (img_url, filename, local_path, safe_url) in items:
             if _download_single_image(img_url, safe_url, local_path):

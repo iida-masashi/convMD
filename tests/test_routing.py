@@ -50,3 +50,14 @@ def test_route_fallback(tmp_path):
 def test_routes_buildable():
     routes = routing._build_routes()
     assert len(routes) > 5
+
+
+def test_has_domain_is_not_substring_match():
+    """'x.com' が vistex.com 等に誤一致して X(Grok) 経路へ流れた事故の回帰テスト。"""
+    from urllib.parse import urlparse
+
+    x = routing._has_domain("x.com", "twitter.com")
+    for url in ("https://www.vistex.com/solutions/a", "https://assets.vistex.com/a.pdf", "https://latex.com/"):
+        assert not x(urlparse(url)), url
+    for url in ("https://x.com/foo", "https://www.x.com/foo", "https://mobile.twitter.com/a"):
+        assert x(urlparse(url)), url

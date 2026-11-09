@@ -59,7 +59,9 @@ def _is_too_small(path: Path) -> bool:
 
 def _has_domain(*needles: str) -> Predicate:
     def check(p: ParseResult) -> bool:
-        return any(n in p.netloc for n in needles)
+        # 部分文字列一致は不可: "x.com" が vistex.com / latex.com に誤一致し X(Grok) 経路へ流れた。
+        host = (p.hostname or "").lower()
+        return any(host == n or host.endswith("." + n) for n in needles)
 
     return check
 
@@ -257,6 +259,7 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
                 ai_extract=cfg.ai_extract if cfg else False,
                 ocr=cfg.ocr if cfg else False,
                 schema=cfg.schema if cfg else None,
+                source_url=url,
             )
 
     routes.append((is_office_url, office_url_handler))

@@ -58,6 +58,7 @@ _ALLOWED_KEYS = {
     "tag_similarity_cutoff",
     "render_js",
     "workers",
+    "origin_line",
 }
 
 

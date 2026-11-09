@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse  # noqa: F401 — re-exported for tests that patch convmd.cli.argparse.ArgumentParser
 import logging
+import os
 import sys
 import time  # noqa: F401 — re-exported for tests that patch convmd.cli.time.time
 from pathlib import Path
@@ -140,6 +141,10 @@ def main() -> None:
 
     output_dir = _resolve_output_dir(args, yaml_defaults or {})
     logger.info(f"Output directory set to: {output_dir}")
+
+    sec_ua = getattr(args, "sec_user_agent", None)
+    if isinstance(sec_ua, str) and sec_ua:
+        os.environ["CONVMD_SEC_USER_AGENT"] = sec_ua
 
     cfg = to_run_config(args, output_dir)
     # ``is False`` (not ``not ...``) so a patched run_pipeline returning a Mock is not a failure.

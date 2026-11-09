@@ -168,7 +168,7 @@ def extract_with_llm(
             tags.append("ai_extract")
 
         unverified = find_unverified_numbers(content_markdown, html_or_text)
-        extra: dict[str, object] = {"extraction": "ai"}
+        extra: dict[str, object] = {"extraction": "ai", "evidence_type": "ai_mediated"}
         if unverified:
             logger.warning(
                 f"{len(unverified)} number(s) in the AI extract were not found in the source: "

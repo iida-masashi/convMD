@@ -64,7 +64,63 @@ def _is_garbled(text: str) -> bool:
     return weird_ratio >= _WEIRD_RATIO_THRESHOLD
 
 
+_CJK_RE = re.compile(r"[\u3040-\u30ff\u3400-\u9fff]")
+_PAGE_MARKER_RE = re.compile(r"<!-- p\.\d+ -->")
+_PYPDF_CJK_MIN = 0.2
+_PYPDF_PREFER_FACTOR = 0.5
+
+
+def _cjk_ratio(text: str) -> float:
+    chars = "".join(c for c in text if not c.isspace())
+    if not chars:
+        return 0.0
+    return len(_CJK_RE.findall(chars)) / len(chars)
+
+
+def _pypdf_markdown(file_path: Path) -> str | None:
+    """Plain per-page text via pypdf, with ``<!-- p.N -->`` markers (None if no text)."""
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(str(file_path))
+        parts: list[str] = []
+        for i, page in enumerate(reader.pages, start=1):
+            text = (page.extract_text() or "").strip()
+            marker = f"<!-- p.{i} -->"
+            parts.append(f"{marker}\n\n{text}" if text else marker)
+    except Exception as e:  # pypdf raises many types on damaged/encrypted PDFs
+        logger.info(f"pypdf could not read {file_path.name}: {e}")
+        return None
+    joined = "\n\n".join(parts)
+    if not _PAGE_MARKER_RE.sub("", joined).strip():
+        return None
+    return joined
+
+
 def _convert_to_markdown_text(file_path: Path) -> str | None:
+    """Engine conversion plus a pypdf fallback for PDFs.
+
+    pypdf is used when every engine failed, or when it recovered far more Japanese text
+    than the engine did (EDINET filings come out as mojibake that the garbled-text
+    heuristic does not catch).
+    """
+    text = _convert_with_engines(file_path)
+    if file_path.suffix.lower() != ".pdf":
+        return text
+    alt = _pypdf_markdown(file_path)
+    if alt is None or _is_garbled(alt):
+        return text
+    if text is None:
+        logger.info(f"Using pypdf text for {file_path.name} (engines produced no usable text)")
+        return alt
+    alt_cjk = _cjk_ratio(alt)
+    if alt_cjk >= _PYPDF_CJK_MIN and _cjk_ratio(text) < alt_cjk * _PYPDF_PREFER_FACTOR:
+        logger.warning(f"Engine text for {file_path.name} lost Japanese text; using pypdf text")
+        return alt
+    return text
+
+
+def _convert_with_engines(file_path: Path) -> str | None:
     """Return extracted Markdown text, or None if every engine produced mojibake or empty text.
 
     anydoc is faster and produces cleaner tables, but can't OCR scanned PDFs or
@@ -108,11 +164,16 @@ def convert_office_file(
     ai_extract: bool = False,
     ocr: bool = False,
     schema: str | None = None,
+    source_url: str | None = None,
 ) -> Path | None:
     """
     Converts local Office files (PPTX, XLSX, DOCX, PDF, etc.) to Markdown
     using anydoc (falling back to MarkItDown when unsupported, and Gemini
     multimodal PDF transcription when ``ocr`` or ``ai_extract`` is enabled).
+
+    ``source_url`` is the original URL when the file was downloaded to a temp
+    directory (office URLs). It is written to the frontmatter ``source:`` instead
+    of the temp path, which would otherwise be unrecoverable once the temp dir is gone.
     """
     logger.info(f"Attempting to convert {file_path}...")
 
@@ -147,7 +208,7 @@ def convert_office_file(
             return extract_with_llm(
                 md_content,
                 output_dir,
-                url=str(file_path.resolve()),
+                url=source_url or str(file_path.resolve()),
                 schema=schema,
             )
 
@@ -155,11 +216,14 @@ def convert_office_file(
         filename = f"{safe_title}.md"
         out_path = output_dir / filename
 
-        tags = ["local_file", "office"]
+        tags = ["web_clip" if source_url else "local_file", "office"]
         if used_pdf_ocr:
             tags.append("ocr")
         frontmatter = generate_frontmatter(
-            title=file_path.name, url=str(file_path.resolve()), tags=tags
+            title=file_path.name,
+            url=source_url or str(file_path.resolve()),
+            tags=tags,
+            extra={"evidence_type": "ai_mediated"} if used_pdf_ocr else None,
         )
 
         out_path.write_text(frontmatter + md_content, encoding="utf-8")
