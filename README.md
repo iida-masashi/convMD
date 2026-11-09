@@ -324,6 +324,8 @@ uv run python -m convmd.cli https://example.com/news --interval 30   # 30分ご�
 - `--open-obsidian`: 処理完了後、`--obsidian-vault` で指定したVault側のノートをOSの既定アプリ（Obsidian URIスキーム）で開きます。`--obsidian-vault` 未指定の場合は警告を表示します。
 - `--no-cache`: `.convmd.db` によるキャッシュ・差分スキップを無効化し、常に再取得・再処理します。出力先に `.convmd.db` と `.chroma_db`（埋め込み）を作りません。
 - `--origin-line`: 各出力の frontmatter 直後に `> 原典URL: <source>` を挿入します（frontmatter の `source:` を表示しない公開環境向け。`.convmd.yaml` の `origin_line: true` でも指定可）。
+- `--pdf-engine pypdf`: PDF を pypdf の素のページ別テキスト（`<!-- p.N -->` つき）で取り込みます。表が多い有価証券報告書では、既定（anydoc/MarkItDown）より出力が小さく、grep しやすくなります（既定は `auto`）。
+- `--dry-run`: 出力先の絶対パスと処理対象（URL・ローカル・EDINET の別）を表示して終了します。取得も書き込みもしません。
 - `--source-url <URL>`: ローカルファイル（手元で保存した PDF など）を変換するとき、frontmatter の `source:` に記録する原典 https URL。
 - `--sec-user-agent "氏名 メール"`: sec.gov・fda.gov が要求する、連絡先つきの User-Agent（環境変数 `CONVMD_SEC_USER_AGENT` でも指定可。未指定だと 403 になることがあります）。
 - 変換後の品質チェック: 本文が空、1MB 超、文字化けの疑いがある出力は警告ログに出ます（終了コードは変わりません）。PDF はエンジンの出力が文字化け・日本語欠落のとき pypdf のテキスト（`<!-- p.N -->` つき）に自動で切り替わります。

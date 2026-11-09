@@ -59,6 +59,7 @@ _ALLOWED_KEYS = {
     "render_js",
     "workers",
     "origin_line",
+    "pdf_engine",
 }
 
 

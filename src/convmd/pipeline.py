@@ -52,6 +52,7 @@ def process_target(
                 ocr=cfg.ocr if cfg else False,
                 schema=cfg.schema if cfg else None,
                 source_url=cfg.source_url if cfg else None,
+                pdf_engine=cfg.pdf_engine if cfg else "auto",
             )
 
         logger.info(f"Analyzing URL: {target_str}")
@@ -459,11 +460,46 @@ def run_once(cfg: RunConfig) -> bool:
     return ok
 
 
+def _describe_target(target: str) -> str:
+    if target.startswith("edinet:"):
+        return "EDINET"
+    if target.startswith(("http://", "https://")):
+        return "URL"
+    path = Path(target)
+    if path.is_dir():
+        return "directory"
+    if path.is_file():
+        return "local file"
+    return "unresolved (not an existing path or URL)"
+
+
+def print_dry_run_plan(cfg: RunConfig) -> None:
+    """Print where output would go and what would be processed. Touches no network or disk."""
+    print(f"[dry-run] output directory: {cfg.output_dir.resolve()}")
+    if cfg.retry_failed or cfg.input_file:
+        from convmd.core.batch import read_failed_targets, read_targets_file
+
+        targets = (
+            read_failed_targets(cfg.output_dir)
+            if cfg.retry_failed
+            else read_targets_file(cfg.input_file)  # type: ignore[arg-type]
+        )
+    else:
+        targets = [cfg.target]
+    print(f"[dry-run] {len(targets)} target(s):")
+    for t in targets:
+        print(f"  - {_describe_target(t)}: {t}")
+    print("[dry-run] nothing was fetched or written.")
+
+
 def run_pipeline(cfg: RunConfig) -> bool:
     """Run the pipeline once, or repeatedly when ``cfg.interval > 0``.
 
     Returns False if a one-shot run's extraction failed; daemon mode always returns True.
     """
+    if cfg.dry_run:
+        print_dry_run_plan(cfg)
+        return True
     if cfg.interval > 0:
         logger.info(f"Starting daemon mode. Running pipeline every {cfg.interval} minutes.")
         try:

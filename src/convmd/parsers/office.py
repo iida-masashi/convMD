@@ -97,15 +97,23 @@ def _pypdf_markdown(file_path: Path) -> str | None:
     return joined
 
 
-def _convert_to_markdown_text(file_path: Path) -> str | None:
+def _convert_to_markdown_text(file_path: Path, pdf_engine: str = "auto") -> str | None:
     """Engine conversion plus a pypdf fallback for PDFs.
+
+    ``pdf_engine="pypdf"`` uses pypdf first for PDFs (engines are only the fallback).
 
     pypdf is used when every engine failed, or when it recovered far more Japanese text
     than the engine did (EDINET filings come out as mojibake that the garbled-text
     heuristic does not catch).
     """
+    is_pdf = file_path.suffix.lower() == ".pdf"
+    if is_pdf and pdf_engine == "pypdf":
+        forced = _pypdf_markdown(file_path)
+        if forced is not None and not _is_garbled(forced):
+            return forced
+        logger.warning(f"pypdf gave no usable text for {file_path.name}; using the default engines")
     text = _convert_with_engines(file_path)
-    if file_path.suffix.lower() != ".pdf":
+    if not is_pdf:
         return text
     alt = _pypdf_markdown(file_path)
     if alt is None or _is_garbled(alt):
@@ -165,6 +173,7 @@ def convert_office_file(
     ocr: bool = False,
     schema: str | None = None,
     source_url: str | None = None,
+    pdf_engine: str = "auto",
 ) -> Path | None:
     """
     Converts local Office files (PPTX, XLSX, DOCX, PDF, etc.) to Markdown
@@ -182,7 +191,11 @@ def convert_office_file(
         return None
 
     try:
-        md_content = _convert_to_markdown_text(file_path)
+        md_content = (
+            _convert_to_markdown_text(file_path, pdf_engine)
+            if pdf_engine != "auto"
+            else _convert_to_markdown_text(file_path)
+        )
         used_pdf_ocr = False
         if md_content is None and file_path.suffix.lower() == ".pdf" and (ocr or ai_extract):
             from convmd.core import gemini

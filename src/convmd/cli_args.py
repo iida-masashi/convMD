@@ -43,6 +43,8 @@ class RunConfig:
     retry_failed: bool = False
     workers: int = 4
     origin_line: bool = False
+    dry_run: bool = False
+    pdf_engine: str = "auto"
     source_url: str | None = None
     extra: dict = field(default_factory=dict)
 
@@ -135,6 +137,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=4,
         help="Max concurrent workers for batch processing, image downloads, and IIIF OCR (default: 4).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the output directory and what would be processed, then exit without "
+        "fetching or writing anything.",
+    )
+    parser.add_argument(
+        "--pdf-engine",
+        choices=["auto", "pypdf"],
+        default="auto",
+        help="PDF text extraction: 'auto' (anydoc/MarkItDown, pypdf as fallback) or 'pypdf' "
+        "(plain per-page text with <!-- p.N --> markers; compact for table-heavy filings).",
     )
     parser.add_argument(
         "--origin-line",
@@ -241,5 +256,7 @@ def to_run_config(args: argparse.Namespace, output_dir: Path) -> RunConfig:
         retry_failed=_typed(args, "retry_failed", False, bool),
         workers=max(1, _typed(args, "workers", 4, int)),
         origin_line=_typed(args, "origin_line", False, bool),
+        dry_run=_typed(args, "dry_run", False, bool),
+        pdf_engine=_typed(args, "pdf_engine", "auto", str),
         source_url=_typed(args, "source_url", None, str),
     )

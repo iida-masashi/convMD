@@ -143,3 +143,45 @@ def test_ocr_output_has_evidence_type(tmp_path):
     ):
         res = office.convert_office_file(f, out, ocr=True)
     assert res is not None and "evidence_type: " in res.read_text(encoding="utf-8")
+
+
+# --- #9 follow-up: --pdf-engine / #14: --dry-run -------------------------------
+def test_pdf_engine_pypdf_used_first(tmp_path):
+    jp = "<!-- p.1 -->\n\n" + "売上高は増加しました。" * 10
+    with (
+        patch.object(office, "_pypdf_markdown", return_value=jp),
+        patch.object(office, "_convert_with_engines") as eng,
+    ):
+        assert office._convert_to_markdown_text(_pdf(tmp_path), "pypdf") == jp
+        eng.assert_not_called()
+
+
+def test_pdf_engine_pypdf_falls_back_to_engines(tmp_path):
+    with (
+        patch.object(office, "_pypdf_markdown", return_value=None),
+        patch.object(office, "_convert_with_engines", return_value="engine text"),
+    ):
+        assert office._convert_to_markdown_text(_pdf(tmp_path), "pypdf") == "engine text"
+
+
+def test_dry_run_prints_plan_and_writes_nothing(tmp_path, capsys):
+    from convmd.cli_args import RunConfig
+    from convmd.pipeline import run_pipeline
+
+    out = tmp_path / "out"
+    cfg = RunConfig(target="https://example.com/a.pdf", output_dir=out, dry_run=True)
+    assert run_pipeline(cfg) is True
+    text = capsys.readouterr().out
+    assert "[dry-run]" in text and "URL: https://example.com/a.pdf" in text
+    assert not out.exists()
+
+
+def test_dry_run_batch_lists_targets(tmp_path, capsys):
+    from convmd.cli_args import RunConfig
+    from convmd.pipeline import run_pipeline
+
+    lst = tmp_path / "urls.txt"
+    lst.write_text("# c\nhttps://a.example/x\nedinet:S100XMJE\n", encoding="utf-8")
+    run_pipeline(RunConfig(target="", output_dir=tmp_path / "o", input_file=lst, dry_run=True))
+    text = capsys.readouterr().out
+    assert "2 target(s)" in text and "EDINET: edinet:S100XMJE" in text

@@ -260,6 +260,7 @@ def _build_routes() -> list[tuple[Predicate, Handler]]:
                 ocr=cfg.ocr if cfg else False,
                 schema=cfg.schema if cfg else None,
                 source_url=url,
+                pdf_engine=cfg.pdf_engine if cfg else "auto",
             )
 
     routes.append((is_office_url, office_url_handler))
